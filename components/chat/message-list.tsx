@@ -26,10 +26,13 @@ export function MessageList({ messages }: { messages: Message[] }) {
     }
   }, [messages])
 
-  // Filter out tool-role messages (internal protocol) and auto-generated move messages
+  // Filter out messages that shouldn't be displayed
   const visibleMessages = messages.filter((msg) => {
     if (msg.role === 'tool') return false
+    // Hide auto-generated "I played X. Your turn." messages
     if (msg.role === 'user' && /^I played .+\. Your turn\.$/.test(msg.content)) return false
+    // Hide empty assistant messages (leftover from tool-only responses saved to DB)
+    if (msg.role === 'assistant' && !msg.content && !msg.toolCalls?.length) return false
     return true
   })
 
