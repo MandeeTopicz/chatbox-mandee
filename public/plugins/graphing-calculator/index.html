@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatBridge Graphing Calculator</title>
+  <script src="https://unpkg.com/function-plot/dist/function-plot.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+    }
+    .equation-bar {
+      width: 100%;
+      max-width: 560px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .equation-bar h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    .equation-bar .eq {
+      font-family: 'Georgia', serif;
+      font-size: 18px;
+      font-style: italic;
+      color: #1a56db;
+      margin-top: 4px;
+    }
+    #graph-container {
+      width: 560px;
+      height: 300px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-panel {
+      width: 100%;
+      max-width: 560px;
+      margin-top: 8px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .info-chip {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: #555;
+    }
+    .info-chip strong { color: #333; }
+    .error-msg {
+      color: #dc2626;
+      font-size: 13px;
+      margin-top: 12px;
+      text-align: center;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 300px;
+      color: #999;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="equation-bar" id="eqBar" style="display:none;">
+    <h3>Graph</h3>
+    <div class="eq" id="eqDisplay"></div>
+  </div>
+  <div id="graph-container">
+    <div class="loading" id="loadingMsg">Waiting for equation...</div>
+  </div>
+  <div class="info-panel" id="infoPanel"></div>
+  <div class="error-msg" id="errorMsg"></div>
+
+  <script>
+    let pluginId = null;
+    let conversationId = null;
+
+    // ===== postMessage helpers =====
+    function sendMsg(type, payload) {
+      parent.postMessage({
+        type: type,
+        conversationId: conversationId,
+        pluginId: pluginId,
+        payload: payload
+      }, '*');
+    }
+
+    // ===== Math utilities =====
+
+    /**
+     * Evaluate an equation string at a given x value.
+     * Uses Function constructor with Math functions in scope.
+     */
+    function evalEquation(eqStr, x) {
+      try {
+        // Replace common math notation with JS equivalents
+        let expr = eqStr
+          .replace(/\^/g, '**')
+          .replace(/\bsin\b/g, 'Math.sin')
+          .replace(/\bcos\b/g, 'Math.cos')
+          .replace(/\btan\b/g, 'Math.tan')
+          .replace(/\babs\b/g, 'Math.abs')
+          .replace(/\bsqrt\b/g, 'Math.sqrt')
+          .replace(/\blog\b/g, 'Math.log10')
+          .replace(/\bln\b/g, 'Math.log')
+          .replace(/\bexp\b/g, 'Math.exp')
+          .replace(/\bpi\b/gi, 'Math.PI')
+          .replace(/\be\b(?![x])/g, 'Math.E');
+
+        const fn = new Function('x', 'return (' + expr + ')');
+        const result = fn(x);
+        return (typeof result === 'number' && isFinite(result)) ? result : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    /**
+     * Find roots using bisection method.
+     * Scans for sign changes across the domain.
+     */
+    function findRoots(eqStr, xMin, xMax) {
+      const roots = [];
+      const steps = 1000;
+      const dx = (xMax - xMin) / steps;
+      const tolerance = 1e-9;
+
+      for (let i = 0; i < steps; i++) {
+        const x1 = xMin + i * dx;
+        const x2 = x1 + dx;
+        const y1 = evalEquation(eqStr, x1);
+        const y2 = evalEquation(eqStr, x2);
+
+        if (y1 === null || y2 === null) continue;
+
+        // Check if y1 is very close to 0
+        if (Math.abs(y1) < tolerance) {
+          const rounded = Math.round(x1 * 1000) / 1000;
+          if (!roots.some(r => Math.abs(r - rounded) < 0.01)) {
+            roots.push(rounded);
+          }
+          continue;
+        }
+
+        // Sign change — bisect
+        if (y1 * y2 < 0) {
+          let lo = x1, hi = x2;
+          for (let j = 0; j < 50; j++) {
+            const mid = (lo + hi) / 2;
+            const yMid = evalEquation(eqStr, mid);
+            if (yMid === null) break;
+            if (Math.abs(yMid) < tolerance) { lo = hi = mid; break; }
+            if (y1 * yMid < 0) hi = mid;
+            else lo = mid;
+          }
+          const root = Math.round(((lo + hi) / 2) * 1000) / 1000;
+          if (!roots.some(r => Math.abs(r - root) < 0.01)) {
+            roots.push(root);
+          }
+        }
+      }
+
+      return roots.sort((a, b) => a - b);
+    }
+
+    /**
+     * Classify the graph type based on the equation string.
+     */
+    function classifyGraph(eqStr) {
+      const eq = eqStr.toLowerCase().replace(/\s/g, '');
+      if (/sin|cos|tan/.test(eq)) return 'trigonometric';
+      if (/\blog|ln/.test(eq)) return 'logarithmic';
+      if (/\bexp\b|\be\^|\be\*\*/.test(eq)) return 'exponential';
+      if (/\bsqrt\b/.test(eq)) return 'radical';
+      if (/\babs\b|\|/.test(eq)) return 'absolute value';
+      if (/x\s*\*\*\s*3|x\s*\^\s*3/.test(eq)) return 'cubic';
+      if (/x\s*\*\*\s*2|x\s*\^\s*2|x\^2/.test(eq)) return 'quadratic';
+      if (/x/.test(eq)) return 'linear';
+      return 'constant';
+    }
+
+    // ===== Tool handler =====
+    function handleRenderGraph(invocationId, params) {
+      const equation = params.equation;
+      const xMin = params.xMin ?? -10;
+      const xMax = params.xMax ?? 10;
+      const yMin = params.yMin ?? -10;
+      const yMax = params.yMax ?? 10;
+
+      if (!equation) {
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'equation parameter is required'
+        });
+        return;
+      }
+
+      // Show equation
+      document.getElementById('eqBar').style.display = 'block';
+      document.getElementById('eqDisplay').textContent = 'y = ' + equation;
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('errorMsg').textContent = '';
+
+      // Render graph with function-plot
+      try {
+        document.getElementById('graph-container').innerHTML = '';
+        functionPlot({
+          target: '#graph-container',
+          width: 560,
+          height: 300,
+          xAxis: { domain: [xMin, xMax] },
+          yAxis: { domain: [yMin, yMax] },
+          grid: true,
+          data: [{
+            fn: equation,
+            color: '#1a56db',
+            graphType: 'polyline'
+          }]
+        });
+      } catch (e) {
+        document.getElementById('errorMsg').textContent = 'Could not render: ' + e.message;
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'Failed to render graph: ' + e.message
+        });
+        return;
+      }
+
+      // Compute analysis
+      const roots = findRoots(equation, xMin, xMax);
+      const yIntercept = evalEquation(equation, 0);
+      const graphType = classifyGraph(equation);
+
+      // Show info chips
+      const infoPanel = document.getElementById('infoPanel');
+      infoPanel.innerHTML = '';
+
+      function addChip(label, value) {
+        const chip = document.createElement('span');
+        chip.className = 'info-chip';
+        chip.innerHTML = '<strong>' + label + ':</strong> ' + value;
+        infoPanel.appendChild(chip);
+      }
+
+      addChip('Type', graphType);
+      if (roots.length > 0) {
+        addChip('Roots', roots.map(function(r) { return 'x = ' + r; }).join(', '));
+      } else {
+        addChip('Roots', 'none in domain');
+      }
+      if (yIntercept !== null) {
+        addChip('Y-intercept', 'y = ' + (Math.round(yIntercept * 1000) / 1000));
+      }
+      addChip('Domain', '[' + xMin + ', ' + xMax + ']');
+
+      // Send structured result
+      var result = {
+        equation: equation,
+        graphType: graphType,
+        roots: roots,
+        yIntercept: yIntercept !== null ? Math.round(yIntercept * 1000) / 1000 : null,
+        domain: [xMin, xMax],
+        range: [yMin, yMax],
+        message: 'Graph of y = ' + equation + ' rendered successfully.'
+      };
+
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: result
+      });
+
+      // Send PLUGIN_COMPLETE immediately — graph is static, no ongoing interaction
+      setTimeout(function() {
+        sendMsg('PLUGIN_COMPLETE', {
+          summary: 'Graphed y = ' + equation + '. ' +
+            'Type: ' + graphType + '. ' +
+            (roots.length > 0
+              ? 'Roots at x = ' + roots.join(', ') + '. '
+              : 'No real roots in the displayed domain. ') +
+            (yIntercept !== null
+              ? 'Y-intercept at y = ' + (Math.round(yIntercept * 1000) / 1000) + '.'
+              : '')
+        });
+      }, 200);
+    }
+
+    // ===== Message listener =====
+    // SECURITY: Sandboxed iframe (allow-scripts only). No access to parent DOM/cookies.
+    // Only processes TOOL_INVOKE messages. No sensitive data to protect.
+    window.addEventListener('message', function(event) {
+      var msg = event.data;
+      if (!msg || typeof msg !== 'object' || !msg.type) return;
+      if (msg.type !== 'TOOL_INVOKE') return;
+
+      if (msg.pluginId) pluginId = msg.pluginId;
+      if (msg.conversationId) conversationId = msg.conversationId;
+
+      if (msg.payload.toolName === 'render_graph') {
+        handleRenderGraph(msg.payload.invocationId, msg.payload.params);
+      } else {
+        sendMsg('TOOL_RESULT', {
+          invocationId: msg.payload.invocationId,
+          error: 'Unknown tool: ' + msg.payload.toolName
+        });
+      }
+    });
+
+    // ===== Init =====
+    var params = new URLSearchParams(window.location.search);
+    pluginId = params.get('pluginId') || 'graphing-calculator';
+    conversationId = params.get('conversationId') || 'unknown';
+
+    sendMsg('PLUGIN_READY', {});
+  </script>
+</body>
+</html>

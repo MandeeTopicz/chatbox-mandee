@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatBridge Chess</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 12px;
+      background: #f8f9fa;
+      gap: 16px;
+    }
+    .board-container { position: relative; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 44px);
+      grid-template-rows: repeat(8, 44px);
+      border: 2px solid #333;
+      border-radius: 2px;
+    }
+    .square {
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; cursor: pointer;
+      user-select: none; position: relative;
+      transition: background-color 0.1s;
+    }
+    .square.light { background: #f0d9b5; }
+    .square.dark { background: #b58863; }
+    .square.selected { background: #829769 !important; }
+    .square.legal-target::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      background: rgba(0,0,0,0.15);
+      border-radius: 50%;
+    }
+    .square.legal-target.has-piece::after {
+      width: 40px; height: 40px;
+      background: transparent;
+      border: 3px solid rgba(0,0,0,0.2);
+    }
+    .square.last-move { background: rgba(155, 199, 0, 0.4) !important; }
+    .coords-rank {
+      position: absolute;
+      font-size: 10px;
+      font-weight: 600;
+      top: 2px; left: 3px;
+    }
+    .coords-file {
+      position: absolute;
+      font-size: 10px;
+      font-weight: 600;
+      bottom: 1px; right: 3px;
+    }
+    .light .coords-rank, .light .coords-file { color: #b58863; }
+    .dark .coords-rank, .dark .coords-file { color: #f0d9b5; }
+
+    .panel {
+      min-width: 160px;
+      font-size: 13px;
+    }
+    .panel h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .status-bar {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .status-bar.playing { background: #dcfce7; color: #166534; }
+    .status-bar.ended { background: #fee2e2; color: #991b1b; }
+    .status-bar.draw { background: #fef3c7; color: #92400e; }
+
+    .move-list {
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .move-list .move-pair {
+      display: flex;
+      gap: 8px;
+      padding: 1px 0;
+    }
+    .move-num { color: #999; min-width: 24px; }
+    .move-white { min-width: 48px; }
+    .move-black { min-width: 48px; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 6px 12px;
+      margin-top: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn:hover { background: #f3f4f6; }
+    .btn.danger { border-color: #fca5a5; color: #dc2626; }
+    .btn.danger:hover { background: #fef2f2; }
+
+    /* Unicode chess pieces */
+  </style>
+</head>
+<body>
+  <div class="board-container">
+    <div class="board" id="board"></div>
+  </div>
+  <div class="panel">
+    <div class="status-bar playing" id="status">White to move</div>
+    <h3>Moves</h3>
+    <div class="move-list" id="moveList"></div>
+    <button class="btn danger" id="resignBtn" onclick="handleResign()">Resign</button>
+  </div>
+
+  <script>
+    // ===== State =====
+    let game = null;
+    let selectedSquare = null;
+    let lastMove = null;
+    let gameOver = false;
+    let pluginId = null;
+    let conversationId = null;
+
+    // Unicode piece map
+    const PIECES = {
+      'wK': '\u2654', 'wQ': '\u2655', 'wR': '\u2656', 'wB': '\u2657', 'wN': '\u2658', 'wP': '\u2659',
+      'bK': '\u265A', 'bQ': '\u265B', 'bR': '\u265C', 'bB': '\u265D', 'bN': '\u265E', 'bP': '\u265F'
+    };
+
+    // ===== Board Rendering =====
+    function renderBoard() {
+      const boardEl = document.getElementById('board');
+      boardEl.innerHTML = '';
+      const board = game.board();
+
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const sq = document.createElement('div');
+          const file = String.fromCharCode(97 + col);
+          const rank = 8 - row;
+          const squareName = file + rank;
+          const isLight = (row + col) % 2 === 0;
+
+          sq.className = 'square ' + (isLight ? 'light' : 'dark');
+          sq.dataset.square = squareName;
+
+          // Highlight selected square
+          if (selectedSquare === squareName) {
+            sq.classList.add('selected');
+          }
+
+          // Highlight last move
+          if (lastMove && (squareName === lastMove.from || squareName === lastMove.to)) {
+            sq.classList.add('last-move');
+          }
+
+          // Show legal move targets
+          if (selectedSquare) {
+            const legalMoves = game.moves({ square: selectedSquare, verbose: true });
+            const isTarget = legalMoves.some(m => m.to === squareName);
+            if (isTarget) {
+              sq.classList.add('legal-target');
+              if (board[row][col]) sq.classList.add('has-piece');
+            }
+          }
+
+          // Place piece
+          const piece = board[row][col];
+          if (piece) {
+            const key = (piece.color === 'w' ? 'w' : 'b') + piece.type.toUpperCase();
+            sq.textContent = PIECES[key] || '';
+          }
+
+          // Coordinate labels
+          if (col === 0) {
+            const rankLabel = document.createElement('span');
+            rankLabel.className = 'coords-rank';
+            rankLabel.textContent = rank;
+            sq.appendChild(rankLabel);
+          }
+          if (row === 7) {
+            const fileLabel = document.createElement('span');
+            fileLabel.className = 'coords-file';
+            fileLabel.textContent = file;
+            sq.appendChild(fileLabel);
+          }
+
+          sq.addEventListener('click', () => handleSquareClick(squareName));
+          boardEl.appendChild(sq);
+        }
+      }
+    }
+
+    function renderMoveList() {
+      const el = document.getElementById('moveList');
+      const history = game.history();
+      let html = '';
+      for (let i = 0; i < history.length; i += 2) {
+        const moveNum = Math.floor(i / 2) + 1;
+        html += '<div class="move-pair">';
+        html += '<span class="move-num">' + moveNum + '.</span>';
+        html += '<span class="move-white">' + history[i] + '</span>';
+        if (history[i + 1]) {
+          html += '<span class="move-black">' + history[i + 1] + '</span>';
+        }
+        html += '</div>';
+      }
+      el.innerHTML = html;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      const resignBtn = document.getElementById('resignBtn');
+
+      if (game.in_checkmate()) {
+        const winner = game.turn() === 'w' ? 'Black' : 'White';
+        statusEl.textContent = 'Checkmate! ' + winner + ' wins';
+        statusEl.className = 'status-bar ended';
+        resignBtn.style.display = 'none';
+        gameOver = true;
+        endGame(winner === 'White' ? 'win' : 'loss', 'checkmate');
+      } else if (game.in_stalemate()) {
+        statusEl.textContent = 'Stalemate — draw';
+        statusEl.className = 'status-bar draw';
+        resignBtn.style.display = 'none';
+        gameOver = true;
+        endGame('draw', 'stalemate');
+      } else if (game.in_draw()) {
+        statusEl.textContent = 'Draw';
+        statusEl.className = 'status-bar draw';
+        resignBtn.style.display = 'none';
+        gameOver = true;
+        endGame('draw', 'insufficient material or repetition');
+      } else if (game.in_threefold_repetition()) {
+        statusEl.textContent = 'Draw by repetition';
+        statusEl.className = 'status-bar draw';
+        resignBtn.style.display = 'none';
+        gameOver = true;
+        endGame('draw', 'threefold repetition');
+      } else if (waitingForAI) {
+        statusEl.textContent = 'AI is thinking...';
+        statusEl.className = 'status-bar playing';
+      } else {
+        const turn = game.turn() === 'w' ? 'White' : 'Black';
+        let status = turn + ' to move';
+        if (game.in_check()) status = turn + ' is in check!';
+        statusEl.textContent = status;
+        statusEl.className = 'status-bar playing';
+      }
+    }
+
+    // ===== User Interaction =====
+    // Student plays as white only. Board is locked during black's turn (AI).
+    let waitingForAI = false;
+
+    function handleSquareClick(square) {
+      if (gameOver) return;
+      if (waitingForAI) return; // Board locked while AI is thinking
+      if (game.turn() !== 'w') return; // Only white can click
+
+      if (selectedSquare) {
+        // Try to make the move
+        const move = game.move({ from: selectedSquare, to: square, promotion: 'q' });
+        if (move) {
+          lastMove = { from: move.from, to: move.to };
+          selectedSquare = null;
+          renderBoard();
+          renderMoveList();
+          updateStatus();
+          if (!gameOver) {
+            // Signal that it's the AI's turn
+            waitingForAI = true;
+            sendStateUpdate(move.san);
+            updateStatus(); // Re-render to show "AI is thinking..."
+          }
+        } else {
+          // If clicking on own piece, reselect
+          const piece = game.get(square);
+          if (piece && piece.color === 'w') {
+            selectedSquare = square;
+          } else {
+            selectedSquare = null;
+          }
+          renderBoard();
+        }
+      } else {
+        // Select a piece — white only
+        const piece = game.get(square);
+        if (piece && piece.color === 'w') {
+          selectedSquare = square;
+          renderBoard();
+        }
+      }
+    }
+
+    function handleResign() {
+      if (gameOver) return;
+      gameOver = true;
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = 'Resigned — Black wins';
+      statusEl.className = 'status-bar ended';
+      document.getElementById('resignBtn').style.display = 'none';
+      endGame('loss', 'resignation');
+    }
+
+    // ===== postMessage Protocol =====
+    function sendMsg(type, payload) {
+      parent.postMessage({
+        type: type,
+        conversationId: conversationId,
+        pluginId: pluginId,
+        payload: payload
+      }, '*');
+    }
+
+    function sendStateUpdate(playerMove) {
+      sendMsg('STATE_UPDATE', {
+        state: game.fen(),
+        turn: game.turn(),
+        playerMove: playerMove || null
+      });
+    }
+
+    function endGame(outcome, reason) {
+      const history = game.history();
+      const summary = buildGameSummary(outcome, reason, history);
+
+      // Post result to the auth API for profile tracking
+      postGameResult(outcome);
+
+      sendMsg('PLUGIN_COMPLETE', { summary: summary, outcome: outcome });
+    }
+
+    function buildGameSummary(outcome, reason, history) {
+      const totalMoves = Math.ceil(history.length / 2);
+      let resultText;
+      if (outcome === 'win') resultText = 'White (student) won';
+      else if (outcome === 'loss') resultText = 'Black won';
+      else resultText = 'Game drawn';
+
+      return resultText + ' by ' + reason + ' after ' + totalMoves + ' moves. '
+        + 'Final position: ' + game.fen() + '. '
+        + 'Move history: ' + history.join(' ');
+    }
+
+    function postGameResult(outcome) {
+      // Sandboxed iframes cannot make fetch requests.
+      // Instead, include the outcome in PLUGIN_COMPLETE summary so the
+      // platform can post the result via the chess API on our behalf.
+      // The outcome is parsed from the summary by ChatInterface.
+      // (This is a no-op — result posting moved to platform side.)
+    }
+
+    // ===== Tool Handlers =====
+    function handleToolInvoke(payload) {
+      const { toolName, params, invocationId } = payload;
+
+      switch (toolName) {
+        case 'start_chess_game':
+          return handleStartGame(invocationId);
+        case 'make_move':
+          return handleMakeMove(invocationId, params);
+        case 'get_board_state':
+          return handleGetBoardState(invocationId);
+        case 'resign_game':
+          return handleResignGame(invocationId);
+        default:
+          sendMsg('TOOL_RESULT', {
+            invocationId: invocationId,
+            error: 'Unknown tool: ' + toolName
+          });
+      }
+    }
+
+    function handleStartGame(invocationId) {
+      game = new Chess();
+      selectedSquare = null;
+      lastMove = null;
+      gameOver = false;
+      waitingForAI = false;
+      document.getElementById('resignBtn').style.display = 'block';
+
+      renderBoard();
+      renderMoveList();
+      updateStatus();
+      sendStateUpdate();
+
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: {
+          fen: game.fen(),
+          status: 'new_game',
+          message: 'Chess game started. White (student) to move first. The board is displayed in the chat.'
+        }
+      });
+    }
+
+    function handleMakeMove(invocationId, params) {
+      if (gameOver) {
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'Game is already over. Start a new game to play.'
+        });
+        return;
+      }
+
+      if (!params || !params.from || !params.to) {
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'Missing required parameters: from and to (algebraic notation, e.g., "e2" and "e4")'
+        });
+        return;
+      }
+
+      const move = game.move({
+        from: params.from,
+        to: params.to,
+        promotion: 'q'
+      });
+
+      if (!move) {
+        // Get legal moves for the source square for a helpful error
+        const legalMoves = game.moves({ square: params.from, verbose: true });
+        let hint = '';
+        if (legalMoves.length > 0) {
+          hint = ' Legal moves from ' + params.from + ': ' +
+            legalMoves.map(function(m) { return m.to; }).join(', ');
+        } else {
+          const piece = game.get(params.from);
+          if (!piece) {
+            hint = ' No piece on ' + params.from + '.';
+          } else if (piece.color !== game.turn()) {
+            hint = ' That is not your piece (it is ' + game.turn() + "'s turn).";
+          } else {
+            hint = ' That piece has no legal moves.';
+          }
+        }
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'Illegal move: ' + params.from + ' to ' + params.to + '.' + hint
+        });
+        return;
+      }
+
+      lastMove = { from: move.from, to: move.to };
+      selectedSquare = null;
+      waitingForAI = false; // Unlock board after AI moves
+      renderBoard();
+      renderMoveList();
+      updateStatus();
+      sendStateUpdate();
+
+      const result = {
+        fen: game.fen(),
+        lastMove: move.san,
+        from: move.from,
+        to: move.to,
+        captured: move.captured || null,
+        status: getGameStatus()
+      };
+
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: result
+      });
+    }
+
+    function handleGetBoardState(invocationId) {
+      if (!game) {
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'No game in progress. Use start_chess_game first.'
+        });
+        return;
+      }
+
+      const history = game.history({ verbose: true });
+      const lastMoveInfo = history.length > 0 ? history[history.length - 1] : null;
+
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: {
+          fen: game.fen(),
+          turn: game.turn() === 'w' ? 'white' : 'black',
+          moveNumber: Math.ceil(game.history().length / 2),
+          inCheck: game.in_check(),
+          status: getGameStatus(),
+          lastMove: lastMoveInfo ? lastMoveInfo.san : null,
+          legalMoves: game.moves(),
+          materialBalance: getMaterialBalance()
+        }
+      });
+    }
+
+    function handleResignGame(invocationId) {
+      if (gameOver) {
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'Game is already over.'
+        });
+        return;
+      }
+
+      gameOver = true;
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = 'Resigned — Black wins';
+      statusEl.className = 'status-bar ended';
+      document.getElementById('resignBtn').style.display = 'none';
+
+      const history = game.history();
+      const summary = buildGameSummary('loss', 'resignation', history);
+      postGameResult('loss');
+
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: {
+          outcome: 'resignation',
+          winner: 'black',
+          fen: game.fen(),
+          totalMoves: Math.ceil(history.length / 2),
+          summary: summary
+        }
+      });
+
+      // PLUGIN_COMPLETE already sent by endGame, but resign_game was called
+      // by Claude, not the UI button — so send PLUGIN_COMPLETE here too
+      sendMsg('PLUGIN_COMPLETE', { summary: summary, outcome: 'loss' });
+    }
+
+    function getGameStatus() {
+      if (game.in_checkmate()) return 'checkmate';
+      if (game.in_stalemate()) return 'stalemate';
+      if (game.in_draw()) return 'draw';
+      if (game.in_check()) return 'check';
+      return 'active';
+    }
+
+    function getMaterialBalance() {
+      const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+      let white = 0, black = 0;
+      const board = game.board();
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = board[r][c];
+          if (piece) {
+            const val = values[piece.type] || 0;
+            if (piece.color === 'w') white += val;
+            else black += val;
+          }
+        }
+      }
+      return { white: white, black: black, advantage: white - black };
+    }
+
+    // ===== Message Listener =====
+    // SECURITY: This iframe runs with sandbox='allow-scripts' (no allow-same-origin).
+    // It has no access to parent DOM, cookies, or localStorage. It only processes
+    // TOOL_INVOKE messages and validates msg.type before acting. The iframe has no
+    // sensitive data to protect — it only receives tool parameters from the platform.
+    window.addEventListener('message', function(event) {
+      var msg = event.data;
+      if (!msg || typeof msg !== 'object' || !msg.type) return;
+      if (msg.type !== 'TOOL_INVOKE') return; // Only accept TOOL_INVOKE
+
+      if (msg.pluginId) pluginId = msg.pluginId;
+      if (msg.conversationId) conversationId = msg.conversationId;
+      handleToolInvoke(msg.payload);
+    });
+
+    // ===== Initialization =====
+    const params = new URLSearchParams(window.location.search);
+    pluginId = params.get('pluginId') || 'chess';
+    conversationId = params.get('conversationId') || 'unknown';
+
+    // Initialize with a blank game for display
+    game = new Chess();
+    renderBoard();
+
+    // Signal PLUGIN_READY
+    sendMsg('PLUGIN_READY', {});
+  </script>
+</body>
+</html>

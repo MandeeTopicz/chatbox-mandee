@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatBridge Test Stub Plugin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 16px;
+      background: #fafafa;
+      color: #333;
+    }
+    h2 { font-size: 14px; margin-bottom: 12px; color: #666; }
+    #log {
+      font-family: monospace;
+      font-size: 12px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 12px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .entry { padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+    .entry:last-child { border-bottom: none; }
+    .timestamp { color: #999; }
+    .type { font-weight: bold; }
+    .type.recv { color: #2563eb; }
+    .type.send { color: #16a34a; }
+    .status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .status.ready { background: #dcfce7; color: #166534; }
+    .status.waiting { background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
+  <h2>ChatBridge Test Stub Plugin</h2>
+  <div id="status" class="status waiting">Initializing...</div>
+  <div id="log"></div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+
+    // State to track context
+    let pluginId = null;
+    let conversationId = null;
+
+    function log(direction, type, data) {
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+      const now = new Date().toISOString().slice(11, 23);
+      entry.innerHTML = `<span class="timestamp">${now}</span> `
+        + `<span class="type ${direction}">[${direction.toUpperCase()}]</span> `
+        + `<span>${type}</span> `
+        + `<span style="color:#666">${JSON.stringify(data).slice(0, 200)}</span>`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Listen for messages from the platform
+    window.addEventListener('message', function(event) {
+      const msg = event.data;
+      if (!msg || !msg.type) return;
+
+      log('recv', msg.type, msg.payload || {});
+
+      if (msg.type === 'TOOL_INVOKE') {
+        // Store context from the invocation
+        pluginId = msg.pluginId;
+        conversationId = msg.conversationId;
+
+        statusEl.textContent = `Processing: ${msg.payload.toolName}`;
+        statusEl.className = 'status waiting';
+
+        // Simulate processing — send back a TOOL_RESULT after 1 second
+        setTimeout(function() {
+          const result = {
+            type: 'TOOL_RESULT',
+            conversationId: conversationId,
+            pluginId: pluginId,
+            payload: {
+              invocationId: msg.payload.invocationId,
+              result: {
+                success: true,
+                toolName: msg.payload.toolName,
+                message: 'Test stub processed: ' + msg.payload.toolName,
+                params_received: msg.payload.params,
+                timestamp: new Date().toISOString()
+              }
+            }
+          };
+
+          log('send', 'TOOL_RESULT', result.payload);
+          parent.postMessage(result, '*');
+
+          // Send PLUGIN_COMPLETE after another second
+          setTimeout(function() {
+            const complete = {
+              type: 'PLUGIN_COMPLETE',
+              conversationId: conversationId,
+              pluginId: pluginId,
+              payload: {
+                summary: 'Test stub completed ' + msg.payload.toolName + ' successfully.'
+              }
+            };
+
+            log('send', 'PLUGIN_COMPLETE', complete.payload);
+            parent.postMessage(complete, '*');
+
+            statusEl.textContent = 'Complete';
+            statusEl.className = 'status ready';
+          }, 1000);
+
+        }, 1000);
+      }
+    });
+
+    // Signal PLUGIN_READY on load
+    // We need the conversationId and pluginId from the URL params or wait for the first message
+    // For the test stub, we extract from URL search params that the platform could pass
+    const params = new URLSearchParams(window.location.search);
+    pluginId = params.get('pluginId') || 'test-stub';
+    conversationId = params.get('conversationId') || 'unknown';
+
+    const readyMsg = {
+      type: 'PLUGIN_READY',
+      conversationId: conversationId,
+      pluginId: pluginId,
+      payload: {}
+    };
+
+    log('send', 'PLUGIN_READY', {});
+    parent.postMessage(readyMsg, '*');
+
+    statusEl.textContent = 'Ready — waiting for TOOL_INVOKE';
+    statusEl.className = 'status ready';
+  </script>
+</body>
+</html>

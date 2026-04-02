@@ -1,267 +1,146 @@
-<p align="right">
-  <a href="README.md">English</a> |
-  <a href="./doc/README-CN.md">简体中文</a>
-</p>
+# ChatBridge
 
-This is the repository for the Chatbox Community Edition, open-sourced under the GPLv3 license.
+ChatBridge is an AI chat platform for TutorMeAI that enables third-party educational applications to run inside the chat window. The AI tutor (powered by Claude) remains aware of what is happening inside those applications — it can invoke them, respond to their output, and continue the conversation with full context. The platform ships with three integrated plugins: a chess game with persistent player profiles, a graphing calculator with structured data analysis, and a flashcard quiz system with teacher-authored content and personalized follow-up.
 
-[Chatbox is going open-source Again!](https://github.com/chatboxai/chatbox/issues/2266)
+**Deployed URL:** _[set after Vercel deployment]_
 
-We regularly sync code from the pro repo to this repo, and vice versa.
+## Setup
 
-### Download for Desktop
+### Prerequisites
 
-<table style="width: 100%">
-  <tr>
-    <td width="25%" align="center">
-      <b>Windows</b>
-    </td>
-    <td width="25%" align="center" colspan="2">
-      <b>MacOS</b>
-    </td>
-    <td width="25%" align="center">
-      <b>Linux</b>
-    </td>
-  </tr>
-  <tr style="text-align: center">
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-windows'>
-        <img src='./doc/statics/windows.png' style="height:24px; width: 24px" />
-        <br />
-        <b>Setup.exe</b>
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-mac-intel'>
-        <img src='./doc/statics/mac.png' style="height:24px; width: 24px" />
-        <br />
-        <b>Intel</b>
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-mac-aarch'>
-        <img src='./doc/statics/mac.png' style="height:24px; width: 24px" />
-        <br />
-        <b style="white-space: nowrap;">Apple Silicon</b>
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-linux'>
-        <img src='./doc/statics/linux.png' style="height:24px; width: 24px" />
-        <br />
-        <b>AppImage</b>
-      </a>
-    </td>
-  </tr>
-</table>
+- Node.js >= 20
+- pnpm >= 10
+- A [Supabase](https://supabase.com) project
+- An [Anthropic](https://console.anthropic.com) API key
 
-### Download for iOS/Android
-
-<a href='https://apps.apple.com/app/chatbox-ai/id6471368056' style='margin-right: 4px'>
-<img src='./doc/statics/app_store.webp' style="height:38px;" />
-</a>
-<a href='https://play.google.com/store/apps/details?id=xyz.chatboxapp.chatbox' style='margin-right: 4px'>
-<img src='./doc/statics/google_play.png' style="height:38px;" />
-</a>
-<a href='https://chatboxai.app/install?download=android_apk' style='margin-right: 4px; display: inline-flex; justify-content: center'>
-<img src='./doc/statics/android.png' style="height:28px; display: inline-block" />
-.APK
-</a>
-
-For more information: [chatboxai.app](https://chatboxai.app/)
-
----
-<div align="center" markdown="1">
-  <a href="https://go.warp.dev/chatbox">
-    <img alt="Warp sponsorship" width="400" src="https://raw.githubusercontent.com/warpdotdev/brand-assets/refs/heads/main/Github/Sponsor/Warp-Github-LG-02.png">
-  </a>
-
-### [Warp, built for coding with multiple AI agents.](https://go.warp.dev/chatbox)
-[Available for MacOS, Linux, & Windows](https://go.warp.dev/chatbox)<br>
-</div>
-
-<hr>
-
-<h1 align="center">
-<img src='./doc/statics/icon.png' width='30'>
-<span>
-    Chatbox
-    <span style="font-size:8px; font-weight: normal;">(Community Edition)</span>
-</span>
-</h1>
-<p align="center">
-    <em>Your Ultimate AI Copilot on the Desktop. <br />Chatbox is a desktop client for ChatGPT, Claude and other LLMs, available on Windows, Mac, Linux</em>
-</p>
-
-<p align="center">
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="macOS" src="https://img.shields.io/badge/-macOS-black?style=flat-square&logo=apple&logoColor=white" />
-</a>
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="Windows" src="https://img.shields.io/badge/-Windows-blue?style=flat-square&logo=windows&logoColor=white" />
-</a>
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="Linux" src="https://img.shields.io/badge/-Linux-yellow?style=flat-square&logo=linux&logoColor=white" />
-</a>
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="Downloads" src="https://img.shields.io/github/downloads/chatboxai/chatbox/total.svg?style=flat" />
-</a>
-</p>
-
-<a href="https://www.producthunt.com/posts/chatbox?utm_source=badge-featured&utm_medium=badge&utm_souce=badge-chatbox" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=429547&theme=light" alt="Chatbox - Better&#0032;UI&#0032;&#0038;&#0032;Desktop&#0032;App&#0032;for&#0032;ChatGPT&#0044;&#0032;Claude&#0032;and&#0032;other&#0032;LLMs&#0046; | Product Hunt" style="width: 150px; height: 30px;" width="100" height="40" /></a>
-
-<a href="./doc/statics/snapshot_light.png">
-<img src="./doc/statics/snapshot_light.png" width="400"/>
-</a>
-<a href="./doc/statics/snapshot_dark.png">
-<img src="./doc/statics/snapshot_dark.png" width="400"/>
-</a>
-
-<!-- <table>
-<tr>
-<td>
-<img src="./dec/../doc/demo_mobile_1.png" alt="App Screenshot" style="box-shadow: 2px 2px 10px rgba(0,0,0,0.1); border: 1px solid #ddd; border-radius: 8px; height: 300px" />
-</td>
-<td>
-<img src="./dec/../doc/demo_mobile_2.png" alt="App Screenshot" style="box-shadow: 2px 2px 10px rgba(0,0,0,0.1); border: 1px solid #ddd; border-radius: 8px; height: 300px" />
-</td>
-</tr>
-</table> -->
-
-## Features
-
--   **Local Data Storage**  
-    :floppy_disk: Your data remains on your device, ensuring it never gets lost and maintains your privacy.
-
--   **No-Deployment Installation Packages**  
-    :package: Get started quickly with downloadable installation packages. No complex setup necessary!
-
--   **Support for Multiple LLM Providers**  
-    :gear: Seamlessly integrate with a variety of cutting-edge language models:
-
-    -   OpenAI (ChatGPT)
-    -   Azure OpenAI
-    -   Claude
-    -   Google Gemini Pro
-    -   Ollama (enable access to local models like llama2, Mistral, Mixtral, codellama, vicuna, yi, and solar)
-    -   ChatGLM-6B
-
--   **Image Generation with Dall-E-3**  
-    :art: Create the images of your imagination with Dall-E-3.
-
--   **Enhanced Prompting**  
-    :speech_balloon: Advanced prompting features to refine and focus your queries for better responses.
-
--   **Keyboard Shortcuts**  
-    :keyboard: Stay productive with shortcuts that speed up your workflow.
-
--   **Markdown, Latex & Code Highlighting**  
-    :scroll: Generate messages with the full power of Markdown and Latex formatting, coupled with syntax highlighting for various programming languages, enhancing readability and presentation.
-
--   **Prompt Library & Message Quoting**  
-    :books: Save and organize prompts for reuse, and quote messages for context in discussions.
-
--   **Streaming Reply**  
-    :arrow_forward: Provide rapid responses to your interactions with immediate, progressive replies.
-
--   **Ergonomic UI & Dark Theme**  
-    :new_moon: A user-friendly interface with a night mode option for reduced eye strain during extended use.
-
--   **Team Collaboration**  
-    :busts_in_silhouette: Collaborate with ease and share OpenAI API resources among your team. [Learn More](./team-sharing/README.md)
-
--   **Cross-Platform Availability**  
-    :computer: Chatbox is ready for Windows, Mac, Linux users.
-
--   **Access Anywhere with the Web Version**  
-    :globe_with_meridians: Use the web application on any device with a browser, anywhere.
-
--   **iOS & Android**  
-    :phone: Use the mobile applications that will bring this power to your fingertips on the go.
-
--   **Multilingual Support**  
-    :earth_americas: Catering to a global audience by offering support in multiple languages:
-
-    -   English
-    -   简体中文 (Simplified Chinese)
-    -   繁體中文 (Traditional Chinese)
-    -   日本語 (Japanese)
-    -   한국어 (Korean)
-    -   Français (French)
-    -   Deutsch (German)
-    -   Русский (Russian)
-    -   Español (Spanish)
-
--   **And More...**  
-    :sparkles: Constantly enhancing the experience with new features!
-
-## FAQ
-
--   [Frequently Asked Questions](./doc/FAQ.md)
-
-## Why I made Chatbox?
-
-I developed Chatbox initially because I was debugging some prompts and found myself in need of a simple and easy-to-use prompt and API debugging tool. I thought there might be more people who needed such a tool, so I open-sourced it.
-
-At first, I didn't know that it would be so popular. I listened to the feedback from the open-source community and continued to develop and improve it. Now, it has become a very useful AI desktop application. There are many users who love Chatbox, and they not only use it for developing and debugging prompts, but also for daily chatting, and even to do some more interesting things like using well-designed prompts to make AI play various professional roles to assist them in everyday work...
-
-## How to Contribute
-
-Any form of contribution is welcome, including but not limited to:
-
--   Submitting issues
--   Submitting pull requests
--   Submitting feature requests
--   Submitting bug reports
--   Submitting documentation revisions
--   Submitting translations
--   Submitting any other forms of contribution
-
-## Prerequisites
-
-- Node.js (v20.x – v22.x)
-- npm (required – pnpm is not supported)
-
-## Build Instructions
-
-1. Clone the repository from Github
+### Installation
 
 ```bash
-git clone https://github.com/chatboxai/chatbox.git
+git clone <your-fork-url>
+cd chatbox-mandee
+pnpm install
 ```
 
-2. Install the required dependencies
+### Environment
+
+Copy the example and fill in your keys:
 
 ```bash
-npm install
+cp .env.local.example .env.local
 ```
 
-3. Start the application (in development mode)
+| Variable | Source |
+|----------|--------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Dashboard → Settings → API → anon public |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API → service_role secret |
+| `ANTHROPIC_API_KEY` | Anthropic Console → API Keys |
+
+### Database
+
+Run the migration in the Supabase SQL Editor:
+
+```sql
+-- Paste the contents of supabase/migrations/001_initial_schema.sql
+```
+
+This creates 7 tables with Row Level Security enabled on all of them:
+
+- `users` — platform auth, student/teacher roles
+- `conversations` — chat sessions
+- `messages` — full message history including tool calls
+- `plugins` — registered third-party app registry
+- `app_sessions` — per-conversation plugin state
+- `chess_profiles` — win/loss/streak/rating per user
+- `quizzes` — teacher-created flashcard sets
+
+Disable "Confirm email" in Supabase Authentication → Providers → Email for development.
+
+### Seed Plugins
 
 ```bash
-npm run dev
+npx tsx scripts/seed-all-plugins.ts
 ```
 
-4. Build the application, package the installer for current platform
+For production, set the base URL:
 
 ```bash
-npm run package
+NEXT_PUBLIC_APP_URL=https://your-app.vercel.app npx tsx scripts/seed-all-plugins.ts
 ```
 
-5. Build the application, package the installer for all platforms
+### Run
 
 ```bash
-npm run package:all
+pnpm next:dev
 ```
 
-## Star History
+Open [http://localhost:3000](http://localhost:3000).
 
-[![Star History Chart](https://api.star-history.com/svg?repos=chatboxai/chatbox&type=Date)](https://star-history.com/#chatboxai/chatbox&Date)
+## Architecture
 
-## Contact
+ChatBridge is built on Next.js 14 App Router with TypeScript, Tailwind CSS, and shadcn/ui conventions. The backend runs entirely in Next.js API routes — there is no separate server. Authentication and data persistence use Supabase (Postgres + Auth), with Row Level Security enforcing access control at the database layer rather than the application layer.
 
-[Twitter](https://x.com/ChatboxAI_HQ) | [Email](mailto:hi@chatboxai.com)
+The chat system sends user messages to a server-side API route (`/api/chat`) that calls the Anthropic API with Claude claude-sonnet-4. Before each request, the route loads all approved plugins from the database and injects their tool schemas into the Claude request. When Claude decides to use a tool, the response is intercepted: instead of streaming text, the server sends a structured SSE event to the frontend indicating which tool was called and with what parameters.
 
-## License
+The frontend receives this event and activates the corresponding plugin. Plugins are self-contained HTML files served from `/public/plugins/` and rendered inside sandboxed iframes (`sandbox="allow-scripts"` only — `allow-same-origin` is never used). Communication between the platform and plugins follows a typed postMessage protocol. The platform sends `TOOL_INVOKE` messages to the iframe; the iframe responds with `TOOL_RESULT`, `STATE_UPDATE`, or `PLUGIN_COMPLETE` messages. Every inbound message is validated against the registered plugin ID and conversation ID before processing.
 
-[LICENSE](./LICENSE)
+When a plugin sends a `TOOL_RESULT`, the frontend forwards it back to `/api/chat`, which injects it into the Claude conversation as a `tool_result` content block and gets Claude's follow-up response. This creates a loop: user speaks → Claude calls tool → plugin processes → result flows back to Claude → Claude responds with context. For stateful plugins like chess, the current game state (FEN) is persisted in the `app_sessions` table and injected into Claude's system prompt on each turn, keeping the AI aware of the live application state.
+
+The flashcard quiz adds a teacher auth gate: quiz creation endpoints check `role=teacher` both in the API route and via RLS policies on the `quizzes` table. Students can take quizzes but cannot create or modify them.
+
+Security is layered: RLS on all tables, iframe sandboxing, postMessage origin validation, tool result schema validation, rate limiting (60 chat/min, 30 tool/min), circuit breaker on plugin failures, CSP headers, and React error boundaries.
+
+## Plugin Contract
+
+Plugins communicate with the platform via `window.postMessage`. Every message has the shape:
+
+```typescript
+{
+  type: string
+  conversationId: string
+  pluginId: string
+  payload: object
+}
+```
+
+### Message Types
+
+| Type | Direction | Description |
+|------|-----------|-------------|
+| `PLUGIN_READY` | Plugin → Platform | Plugin has loaded and is ready to receive tool invocations. |
+| `TOOL_INVOKE` | Platform → Plugin | Claude called a tool. Contains `toolName`, `params`, and `invocationId`. |
+| `TOOL_RESULT` | Plugin → Platform | Tool execution result. Contains `invocationId`, `result`, and optional `error`. |
+| `STATE_UPDATE` | Plugin → Platform | Current application state. Stored in `app_sessions`, passed to Claude on next turn. |
+| `PLUGIN_COMPLETE` | Plugin → Platform | Task complete. Contains a `summary` string with context for Claude's follow-up. |
+| `PLUGIN_ERROR` | Plugin → Platform | Application-level error. Counts toward the circuit breaker (3 = disabled). |
+
+### Registering a New Plugin
+
+1. Create a self-contained HTML file in `public/plugins/your-plugin/index.html`
+2. On load, send `PLUGIN_READY` via `parent.postMessage()`
+3. Listen for `TOOL_INVOKE` messages, process them, send `TOOL_RESULT` back
+4. Add the plugin to the `plugins` table with tool schemas (use `scripts/seed-all-plugins.ts` as a template)
+5. Set `allowed: true` to activate
+
+## Deployment (Vercel)
+
+1. Push repo to GitHub
+2. Import in Vercel, set build command to `next build`
+3. Add all 4 environment variables from `.env.local`
+4. In Supabase Auth settings, add the Vercel URL to Site URL and Redirect URLs
+5. Re-seed plugins with the production URL:
+   ```bash
+   NEXT_PUBLIC_APP_URL=https://your-app.vercel.app npx tsx scripts/seed-all-plugins.ts
+   ```
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 14 (App Router) + TypeScript |
+| UI | Tailwind CSS + shadcn/ui conventions |
+| Database | Supabase (PostgreSQL + Auth + RLS) |
+| LLM | Anthropic Claude claude-sonnet-4 with tool use |
+| Plugin layer | iframe + postMessage (sandboxed) |
+| Streaming | Server-Sent Events (SSE) |
+| Deployment | Vercel |

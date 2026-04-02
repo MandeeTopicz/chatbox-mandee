@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatBridge Flashcard Quiz</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #fafafa;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+    }
+    .container {
+      width: 100%;
+      max-width: 520px;
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .progress-track {
+      flex: 1;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #3b82f6;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .progress-label {
+      font-size: 12px;
+      color: #6b7280;
+      white-space: nowrap;
+    }
+
+    /* Card */
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-topic {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #9ca3af;
+      margin-bottom: 12px;
+    }
+    .card-question {
+      font-size: 18px;
+      font-weight: 600;
+      color: #111;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    /* Answer input */
+    .answer-section {
+      margin-top: 16px;
+    }
+    .answer-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .answer-input:focus { border-color: #3b82f6; }
+    .answer-input.correct { border-color: #22c55e; background: #f0fdf4; }
+    .answer-input.incorrect { border-color: #ef4444; background: #fef2f2; }
+    .answer-input:disabled { opacity: 0.7; cursor: not-allowed; }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+    .btn-secondary:hover { background: #e5e7eb; }
+
+    /* Feedback */
+    .feedback {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .feedback.correct { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .feedback.incorrect { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    /* Summary screen */
+    .summary {
+      text-align: center;
+      padding: 24px;
+    }
+    .summary-score {
+      font-size: 48px;
+      font-weight: 700;
+      color: #111;
+      margin: 8px 0;
+    }
+    .summary-label {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .summary-details {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin: 16px 0;
+    }
+    .detail-item {
+      text-align: center;
+    }
+    .detail-num {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .detail-num.green { color: #22c55e; }
+    .detail-num.red { color: #ef4444; }
+    .detail-label {
+      font-size: 11px;
+      color: #9ca3af;
+      text-transform: uppercase;
+    }
+    .weak-areas {
+      margin-top: 16px;
+      text-align: left;
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .weak-areas h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #92400e;
+      margin-bottom: 6px;
+    }
+    .weak-areas li {
+      font-size: 13px;
+      color: #78350f;
+      margin-left: 16px;
+      margin-bottom: 2px;
+    }
+
+    /* Loading state */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+      font-size: 14px;
+    }
+    .error-msg {
+      text-align: center;
+      padding: 24px;
+      color: #dc2626;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="app">
+    <div class="loading" id="loadingMsg">Loading quiz...</div>
+  </div>
+
+  <script>
+    let pluginId = null;
+    let conversationId = null;
+    let quizData = null;
+    let currentIndex = 0;
+    let answers = []; // { correct: bool, studentAnswer: string, correctAnswer: string, question: string }
+
+    // ===== postMessage =====
+    function sendMsg(type, payload) {
+      parent.postMessage({
+        type: type,
+        conversationId: conversationId,
+        pluginId: pluginId,
+        payload: payload
+      }, '*');
+    }
+
+    // ===== Render functions =====
+    function renderCard() {
+      if (!quizData) return;
+      const card = quizData.cards[currentIndex];
+      const total = quizData.cards.length;
+      const pct = ((currentIndex) / total) * 100;
+
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="progress-bar">
+          <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <span class="progress-label">Card ${currentIndex + 1} of ${total}</span>
+        </div>
+        <div class="card">
+          <div class="card-topic">${escHtml(quizData.topic)}</div>
+          <div class="card-question">${escHtml(card.question)}</div>
+          <div class="answer-section">
+            <input type="text" class="answer-input" id="answerInput"
+              placeholder="Type your answer..." autocomplete="off" />
+            <div class="btn-row">
+              <button class="btn btn-primary" id="submitBtn" onclick="checkAnswer()">Submit</button>
+            </div>
+            <div id="feedback"></div>
+          </div>
+        </div>
+      `;
+
+      var input = document.getElementById('answerInput');
+      input.focus();
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') checkAnswer();
+      });
+    }
+
+    function checkAnswer() {
+      var input = document.getElementById('answerInput');
+      var submitBtn = document.getElementById('submitBtn');
+      var feedbackEl = document.getElementById('feedback');
+
+      var studentAnswer = input.value.trim();
+      if (!studentAnswer) return;
+
+      input.disabled = true;
+      submitBtn.disabled = true;
+
+      var card = quizData.cards[currentIndex];
+      var correct = normalizeAnswer(studentAnswer) === normalizeAnswer(card.answer);
+
+      answers.push({
+        correct: correct,
+        studentAnswer: studentAnswer,
+        correctAnswer: card.answer,
+        question: card.question
+      });
+
+      input.className = 'answer-input ' + (correct ? 'correct' : 'incorrect');
+
+      if (correct) {
+        feedbackEl.innerHTML = '<div class="feedback correct">Correct!</div>';
+      } else {
+        feedbackEl.innerHTML = '<div class="feedback incorrect">Incorrect. The answer is: <strong>'
+          + escHtml(card.answer) + '</strong></div>';
+      }
+
+      // Auto-advance after a delay
+      setTimeout(function() {
+        currentIndex++;
+        if (currentIndex < quizData.cards.length) {
+          renderCard();
+        } else {
+          renderSummary();
+        }
+      }, correct ? 1200 : 2500);
+    }
+
+    function normalizeAnswer(str) {
+      return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function renderSummary() {
+      var total = quizData.cards.length;
+      var correctCount = answers.filter(function(a) { return a.correct; }).length;
+      var incorrectCount = total - correctCount;
+      var pct = Math.round((correctCount / total) * 100);
+      var weakAreas = answers.filter(function(a) { return !a.correct; });
+
+      var weakHtml = '';
+      if (weakAreas.length > 0) {
+        weakHtml = '<div class="weak-areas"><h4>Areas to Review</h4><ul>';
+        weakAreas.forEach(function(w) {
+          weakHtml += '<li>' + escHtml(w.question) + ' (Answer: ' + escHtml(w.correctAnswer) + ')</li>';
+        });
+        weakHtml += '</ul></div>';
+      }
+
+      var app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="progress-bar">
+          <div class="progress-track"><div class="progress-fill" style="width:100%"></div></div>
+          <span class="progress-label">Complete!</span>
+        </div>
+        <div class="card summary">
+          <div class="summary-label">Your Score</div>
+          <div class="summary-score">${pct}%</div>
+          <div class="summary-details">
+            <div class="detail-item">
+              <div class="detail-num green">${correctCount}</div>
+              <div class="detail-label">Correct</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-num red">${incorrectCount}</div>
+              <div class="detail-label">Incorrect</div>
+            </div>
+          </div>
+          ${weakHtml}
+        </div>
+      `;
+
+      // Send PLUGIN_COMPLETE with score data
+      sendMsg('PLUGIN_COMPLETE', {
+        summary: 'Quiz complete: ' + quizData.topic + '. '
+          + 'Score: ' + correctCount + '/' + total + ' (' + pct + '%). '
+          + (weakAreas.length > 0
+            ? 'Weak areas: ' + weakAreas.map(function(w) { return w.question; }).join('; ') + '.'
+            : 'All correct!')
+      });
+
+      // Also send a TOOL_RESULT-style state update with structured data
+      sendMsg('STATE_UPDATE', {
+        state: {
+          status: 'completed',
+          topic: quizData.topic,
+          totalCards: total,
+          correct: correctCount,
+          incorrect: incorrectCount,
+          percentage: pct,
+          weakAreas: weakAreas.map(function(w) {
+            return { question: w.question, correctAnswer: w.correctAnswer, studentAnswer: w.studentAnswer };
+          })
+        }
+      });
+    }
+
+    function escHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ===== Tool handlers =====
+    // Quiz data is passed via params._quizData (enriched server-side)
+    // because sandboxed iframes cannot make fetch requests.
+    function handleStartQuiz(invocationId, params) {
+      var quiz = params._quizData;
+
+      if (!quiz) {
+        document.getElementById('app').innerHTML =
+          '<div class="error-msg">No quiz found for topic: ' + escHtml(params.topic || '') + '</div>';
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'No quiz found for topic: ' + (params.topic || 'unknown')
+        });
+        return;
+      }
+
+      if (!quiz.cards || quiz.cards.length === 0) {
+        document.getElementById('app').innerHTML =
+          '<div class="error-msg">Quiz has no cards.</div>';
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'Quiz has no cards'
+        });
+        return;
+      }
+
+      quizData = quiz;
+      currentIndex = 0;
+      answers = [];
+
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: {
+          quizId: quiz.id,
+          title: quiz.title,
+          topic: quiz.topic,
+          totalCards: quiz.cards.length,
+          message: 'Quiz "' + quiz.title + '" loaded with ' + quiz.cards.length + ' cards on ' + quiz.topic + '.'
+        }
+      });
+
+      renderCard();
+    }
+
+    function handleSubmitAnswer(invocationId, params) {
+      if (!quizData) {
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'No quiz in progress. Use start_quiz first.'
+        });
+        return;
+      }
+
+      var cardIndex = params.cardIndex;
+      var answer = params.answer;
+
+      if (cardIndex < 0 || cardIndex >= quizData.cards.length) {
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: 'Invalid card index: ' + cardIndex
+        });
+        return;
+      }
+
+      var card = quizData.cards[cardIndex];
+      var correct = normalizeAnswer(answer) === normalizeAnswer(card.answer);
+
+      answers.push({
+        correct: correct,
+        studentAnswer: answer,
+        correctAnswer: card.answer,
+        question: card.question
+      });
+
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: {
+          correct: correct,
+          correctAnswer: card.answer,
+          cardIndex: cardIndex,
+          remaining: quizData.cards.length - cardIndex - 1
+        }
+      });
+
+      // Advance the UI
+      currentIndex = cardIndex + 1;
+      if (currentIndex < quizData.cards.length) {
+        renderCard();
+      } else {
+        renderSummary();
+      }
+    }
+
+    // ===== Message listener =====
+    // SECURITY: Sandboxed iframe (allow-scripts only). No access to parent DOM/cookies.
+    // Only processes TOOL_INVOKE messages. No sensitive data to protect.
+    window.addEventListener('message', function(event) {
+      var msg = event.data;
+      if (!msg || typeof msg !== 'object' || !msg.type) return;
+      if (msg.type !== 'TOOL_INVOKE') return;
+
+      if (msg.pluginId) pluginId = msg.pluginId;
+      if (msg.conversationId) conversationId = msg.conversationId;
+
+      if (msg.payload.toolName === 'start_quiz') {
+        handleStartQuiz(msg.payload.invocationId, msg.payload.params);
+      } else if (msg.payload.toolName === 'submit_answer') {
+        handleSubmitAnswer(msg.payload.invocationId, msg.payload.params);
+      } else {
+        sendMsg('TOOL_RESULT', {
+          invocationId: msg.payload.invocationId,
+          error: 'Unknown tool: ' + msg.payload.toolName
+        });
+      }
+    });
+
+    // ===== Init =====
+    var params = new URLSearchParams(window.location.search);
+    pluginId = params.get('pluginId') || 'flashcard-quiz';
+    conversationId = params.get('conversationId') || 'unknown';
+
+    sendMsg('PLUGIN_READY', {});
+  </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
   "productName": "xyz.chatboxapp.ce",
   "version": "0.0.1",
   "engines": {
-    "node": ">=20.0.0 <23.0.0",
+    "node": ">=20.0.0",
     "pnpm": ">=10.17.0"
   },
   "private": true,
@@ -57,7 +57,10 @@
     "mobile:android": "pnpm run mobile:sync:android && npx cap open android",
     "mobile:assets": "npx capacitor-assets generate --ios --android",
     "prepare": "node -e \"try { require('husky') } catch(e) { process.exit(0) }\" && husky || true",
-    "translate": "i18next && node script/translate.mjs"
+    "translate": "i18next && node script/translate.mjs",
+    "next:dev": "next dev -p 3000",
+    "next:build": "next build",
+    "next:start": "next start"
   },
   "repository": {
     "type": "git",
@@ -138,7 +141,6 @@
     "@types/autosize": "^4.0.3",
     "@types/big.js": "^6.2.2",
     "@types/canvas-confetti": "^1.9.0",
-    "canvas-confetti": "^1.9.4",
     "@types/d3": "^7.4.3",
     "@types/epub": "^0.0.11",
     "@types/gtag.js": "^0.0.13",
@@ -170,6 +172,7 @@
     "babel-loader": "^10.0.0",
     "big.js": "^7.0.1",
     "browserslist-config-erb": "^0.0.3",
+    "canvas-confetti": "^1.9.4",
     "capacitor-plugin-safe-area": "^4.0.0",
     "capacitor-stream-http": "^0.1.0",
     "chalk": "^4.1.2",
@@ -283,6 +286,7 @@
     "zustand": "^5.0.6"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@libsql/client": "^0.15.6",
     "@lobehub/icons": "^4.0.2",
     "@mastra/core": "^0.13.2",
@@ -291,6 +295,8 @@
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@mozilla/readability": "^0.5.0",
     "@sentry/node": "^9.28.1",
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.100.0",
     "auto-launch": "^5.0.6",
     "chardet": "^2.1.0",
     "cohere-ai": "^7.17.1",
@@ -305,6 +311,7 @@
     "iconv-lite": "^0.6.3",
     "linkedom": "^0.18.5",
     "lodash": "^4.17.21",
+    "next": "^14.2.35",
     "ofetch": "^1.0.1",
     "officeparser": "5.0.0",
     "sanitize-filename": "^1.6.3",
