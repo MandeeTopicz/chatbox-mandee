@@ -297,7 +297,7 @@
     "@mastra/rag": "^1.0.8",
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@mozilla/readability": "^0.5.0",
-    "@sentry/nextjs": "^10.47.0",
+    "@sentry/nextjs": "^8.55.1",
     "@sentry/node": "^9.28.1",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.100.0",
