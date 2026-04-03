@@ -18,7 +18,7 @@ export async function GET() {
   const { data: tokens, error } = await serviceClient
     .from('google_tokens')
     .select('provider')
-    .eq('user_id', user.id)
+    .eq('user_id', user.id) as { data: { provider: string }[] | null; error: { message: string } | null }
 
   if (error) {
     console.error('[connections] Failed to fetch tokens:', error.message)
