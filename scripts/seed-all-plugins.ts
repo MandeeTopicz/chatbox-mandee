@@ -111,6 +111,27 @@ const plugins = [
     ],
     allowed: true,
   },
+  {
+    name: 'weather',
+    url: `${baseUrl}/plugins/weather/index.html`,
+    tool_schemas: [
+      {
+        name: 'get_weather',
+        description: 'Get current weather conditions for a city. Returns temperature, humidity, wind speed, and description. Use when the student asks about weather in a specific location.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            city: {
+              type: 'string',
+              description: 'City name (e.g., "New York", "London", "Tokyo")',
+            },
+          },
+          required: ['city'],
+        },
+      },
+    ],
+    allowed: true,
+  },
 ]
 
 async function seed() {

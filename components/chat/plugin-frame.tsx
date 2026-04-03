@@ -190,11 +190,7 @@ export function PluginFrame({
           // NOT plugin failures. Don't increment failureCount — the plugin is
           // working correctly by reporting the error. Only timeouts and
           // PLUGIN_ERROR count toward disabling.
-          if (msg.payload.error) {
-            setError(msg.payload.error)
-          } else {
-            setError(null)
-          }
+          setError(null)
           onToolResult(msg.payload.invocationId, msg.payload.error ? { error: msg.payload.error } : msg.payload.result)
           break
 

@@ -448,29 +448,55 @@ function buildClaudeMessages(history: DbMessage[]): Anthropic.MessageParam[] {
     }
   }
 
-  // Fix orphaned tool_use blocks: if the last assistant message has tool_use
-  // but there's no following tool_result, add synthetic error results so Claude
-  // doesn't reject the request. This happens when a plugin fails to load.
-  if (messages.length > 0) {
-    const last = messages[messages.length - 1]
-    if (last.role === 'assistant' && Array.isArray(last.content)) {
-      const toolUseBlocks = (last.content as Array<{ type: string; id?: string }>).filter(
-        (b) => b.type === 'tool_use'
-      )
-      if (toolUseBlocks.length > 0) {
-        // Check if there's already a following tool_result — if not, add one
-        const resultBlocks = toolUseBlocks.map((block) => ({
-          type: 'tool_result' as const,
-          tool_use_id: block.id!,
-          content: 'Tool invocation failed: plugin did not respond.',
-          is_error: true as const,
-        }))
-        messages.push({ role: 'user', content: resultBlocks })
+  // Fix orphaned tool_use blocks: every assistant message with tool_use must be
+  // followed by a user message containing matching tool_result blocks. If not,
+  // inject synthetic error results so Claude doesn't reject the request.
+  // This handles plugin failures, timeouts, and interrupted conversations.
+  const fixed: Anthropic.MessageParam[] = []
+  for (let i = 0; i < messages.length; i++) {
+    fixed.push(messages[i])
+    const msg = messages[i]
+    if (msg.role !== 'assistant' || !Array.isArray(msg.content)) continue
+
+    const toolUseBlocks = (msg.content as Array<{ type: string; id?: string }>).filter(
+      (b) => b.type === 'tool_use'
+    )
+    if (toolUseBlocks.length === 0) continue
+
+    // Collect tool_result ids from the next message (if it exists and is a user message)
+    const next = messages[i + 1]
+    const existingResultIds = new Set<string>()
+    if (next?.role === 'user' && Array.isArray(next.content)) {
+      for (const block of next.content as Array<{ type: string; tool_use_id?: string }>) {
+        if (block.type === 'tool_result' && block.tool_use_id) {
+          existingResultIds.add(block.tool_use_id)
+        }
+      }
+    }
+
+    // Find tool_use blocks without matching results
+    const orphaned = toolUseBlocks.filter((b) => !existingResultIds.has(b.id!))
+    if (orphaned.length > 0) {
+      const resultBlocks = orphaned.map((block) => ({
+        type: 'tool_result' as const,
+        tool_use_id: block.id!,
+        content: 'Tool invocation failed: plugin did not respond.',
+        is_error: true as const,
+      }))
+      if (existingResultIds.size > 0) {
+        // Next message already has some tool_results — append the missing ones
+        const existingContent = next!.content as unknown as unknown[]
+        const nextContent = existingContent.concat(resultBlocks)
+        // Replace the next message in-place so we don't push it twice
+        messages[i + 1] = { role: 'user', content: nextContent as unknown as Anthropic.MessageParam['content'] }
+      } else {
+        // No tool_result message follows — inject one
+        fixed.push({ role: 'user', content: resultBlocks })
       }
     }
   }
 
-  return messages
+  return fixed
 }
 
 /**

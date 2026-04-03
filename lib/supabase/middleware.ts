@@ -75,8 +75,8 @@ export async function updateSession(request: NextRequest) {
       `style-src 'self' 'unsafe-inline'`,
       `img-src 'self' data: blob: https://api.weather.gov https://i.scdn.co`,
       `font-src 'self'`,
-      `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} https://accounts.google.com https://oauth2.googleapis.com https://classroom.googleapis.com https://api.weather.gov https://geocoding-api.open-meteo.com https://api.spotify.com https://accounts.spotify.com`,
-      `frame-src 'self'`,
+      `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} https://unpkg.com https://accounts.google.com https://oauth2.googleapis.com https://classroom.googleapis.com https://api.weather.gov https://geocoding-api.open-meteo.com https://api.spotify.com https://accounts.spotify.com`,
+      `frame-src 'self' ${appOrigin} ${process.env.NEXT_PUBLIC_APP_URL || ''}`,
       `frame-ancestors 'self'`,
     ].join('; ')
   )

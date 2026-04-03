@@ -55,6 +55,7 @@ export function ChatInterface({
   )
   const [activePlugin, setActivePlugin] = useState<PluginInvocation | null>(null)
   const activePluginIdRef = useRef<string | null>(null)
+  const syntheticToolIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (initialConversationId) {
@@ -250,6 +251,13 @@ export function ChatInterface({
   const handleToolResult = useCallback(
     async (toolUseId: string, result: unknown) => {
       if (!conversationId) return
+      // Synthetic tool calls (parsed from AI text) have no matching tool_use in
+      // the DB history. Sending their results back would cause an orphaned
+      // tool_result error. The iframe already applied the move visually.
+      if (syntheticToolIdsRef.current.has(toolUseId)) {
+        syntheticToolIdsRef.current.delete(toolUseId)
+        return
+      }
       setIsStreaming(true)
 
       const followUpId = crypto.randomUUID()
@@ -319,7 +327,10 @@ export function ChatInterface({
       // If it's the AI's turn (black) after a player move, auto-trigger Claude
       if (payload?.turn === 'b' && payload?.playerMove && !isStreaming) {
         console.log('[chess-orchestrator] Player moved:', payload.playerMove, '— triggering AI response')
-        const moveMsg = `I played ${payload.playerMove}. Your turn. You MUST call make_move now.`
+        const isRetry = payload.playerMove === 'retry'
+        const moveMsg = isRetry
+          ? `It's your turn as black. You MUST call make_move now with {from, to} squares. Do NOT describe your move in words.`
+          : `I played ${payload.playerMove}. Your turn. You MUST call make_move now.`
         setIsStreaming(true)
 
         const assistantId = crypto.randomUUID()
@@ -350,6 +361,7 @@ export function ChatInterface({
             if (parsed && activePlugin) {
               console.log('[chess-orchestrator] Parsed move from text:', parsed, '— injecting synthetic tool call')
               const syntheticId = crypto.randomUUID()
+              syntheticToolIdsRef.current.add(syntheticId)
               activatePlugin({
                 ...activePlugin,
                 toolUseId: syntheticId,
