@@ -56,7 +56,6 @@ export function ChatInterface({
   const [activePlugin, setActivePlugin] = useState<PluginInvocation | null>(null)
   const activePluginIdRef = useRef<string | null>(null)
   const syntheticToolIdsRef = useRef<Set<string>>(new Set())
-
   useEffect(() => {
     if (initialConversationId) {
       setConversationId(initialConversationId)
@@ -69,17 +68,31 @@ export function ChatInterface({
     }
   }, [initialConversationId])
 
+  // Listen for reset-chat events (e.g. "New" button clicked while already on /chat)
+  useEffect(() => {
+    function handleReset() {
+      setMessages([])
+      setConversationId(null)
+      setActivePlugin(null)
+      activePluginIdRef.current = null
+    }
+    window.addEventListener('reset-chat', handleReset)
+    return () => window.removeEventListener('reset-chat', handleReset)
+  }, [])
+
   // Listen for starter-prompt events from sidebar tool shortcut buttons
+  const sendMessageRef = useRef(sendMessage)
+  sendMessageRef.current = sendMessage
   useEffect(() => {
     function handleStarterPrompt(e: Event) {
       const prompt = (e as CustomEvent).detail
-      if (prompt && typeof prompt === 'string' && !isStreaming) {
-        sendMessage(prompt)
+      if (prompt && typeof prompt === 'string') {
+        sendMessageRef.current(prompt)
       }
     }
     window.addEventListener('starter-prompt', handleStarterPrompt)
     return () => window.removeEventListener('starter-prompt', handleStarterPrompt)
-  }, [isStreaming])
+  }, [])
 
   async function loadMessages(convId: string) {
     const res = await fetch(`/api/conversations/${convId}`)
@@ -117,7 +130,6 @@ export function ChatInterface({
             case 'conversation_id':
               if (!conversationId) {
                 setConversationId(event.id)
-                window.history.replaceState(null, '', `/chat/${event.id}`)
               }
               break
 
