@@ -7,7 +7,7 @@ import {
   type InboundPluginMessage,
   type ToolInvokeMessage,
 } from '@/lib/plugin-protocol'
-import { Loader2, X, AlertTriangle, Crown, LineChart, Layers, CloudSun } from 'lucide-react'
+import { Loader2, X, AlertTriangle, Crown, LineChart, Layers, CloudSun, Music } from 'lucide-react'
 
 // Log events to console — Sentry capture is server-only to avoid bundling OpenTelemetry
 function captureEvent(event: { message: string; level: string; tags?: Record<string, unknown>; extra?: Record<string, unknown> }) {
@@ -46,6 +46,14 @@ const PLUGIN_THEMES: Record<string, { headerBg: string; bodyBg: string; text: st
     closeHover: 'hover:bg-sky-500',
     icon: CloudSun,
     height: 'h-[420px]',
+  },
+  spotify: {
+    headerBg: 'bg-[#1DB954]',
+    bodyBg: 'bg-neutral-950',
+    text: 'text-white',
+    closeHover: 'hover:bg-[#1aa34a]',
+    icon: Music,
+    height: 'h-96',
   },
 }
 

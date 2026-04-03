@@ -25,6 +25,9 @@ const TOOL_SCHEMAS: Record<string, string[]> = {
   submit_answer: ['correct', 'correctAnswer', 'cardIndex', 'remaining'],
   // Weather
   get_weather: ['city', 'country', 'temp', 'feels_like', 'humidity', 'wind_speed', 'description', 'condition', 'message'],
+  // Spotify
+  search_tracks: ['tracks', 'query', 'message'],
+  create_playlist: ['playlistId', 'name', 'url', 'trackCount', 'message'],
   // Test stub
   test_echo: ['success', 'toolName', 'message', 'params_received', 'timestamp'],
 }

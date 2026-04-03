@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatBridge Spotify</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #121212;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+    }
+    .container { width: 100%; max-width: 520px; }
+    .loading { text-align: center; padding: 40px; color: #b3b3b3; font-size: 14px; }
+    .error-msg { text-align: center; padding: 24px; color: #ff6b6b; font-size: 14px; }
+
+    /* Track list */
+    .track-list { display: flex; flex-direction: column; gap: 8px; }
+    .track {
+      display: flex; align-items: center; gap: 12px;
+      background: #1a1a1a; border-radius: 8px; padding: 10px;
+      transition: background 0.15s;
+    }
+    .track:hover { background: #282828; }
+    .track-art {
+      width: 48px; height: 48px; border-radius: 4px;
+      object-fit: cover; background: #333;
+    }
+    .track-info { flex: 1; min-width: 0; }
+    .track-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-artist { font-size: 12px; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-duration { font-size: 11px; color: #666; }
+
+    /* Playlist created */
+    .playlist-card {
+      background: linear-gradient(135deg, #1DB954 0%, #1aa34a 100%);
+      border-radius: 12px; padding: 20px; text-align: center;
+    }
+    .playlist-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .playlist-meta { font-size: 12px; opacity: 0.8; margin-bottom: 16px; }
+    .playlist-link {
+      display: inline-block; background: #fff; color: #1DB954;
+      padding: 8px 20px; border-radius: 20px; font-size: 13px;
+      font-weight: 700; text-decoration: none;
+    }
+
+    .section-title {
+      font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+      color: #b3b3b3; margin-bottom: 8px; font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="app">
+    <div class="loading">Waiting for Spotify...</div>
+  </div>
+
+  <script>
+    var pluginId = null;
+    var conversationId = null;
+
+    function sendMsg(type, payload) {
+      parent.postMessage({
+        type: type, conversationId: conversationId,
+        pluginId: pluginId, payload: payload
+      }, '*');
+    }
+
+    function escHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    function formatDuration(ms) {
+      var min = Math.floor(ms / 60000);
+      var sec = Math.floor((ms % 60000) / 1000);
+      return min + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+
+    function renderTracks(tracks, title) {
+      var app = document.getElementById('app');
+      var html = '<div class="section-title">' + escHtml(title || 'Search Results') + '</div>';
+      html += '<div class="track-list">';
+      for (var i = 0; i < tracks.length; i++) {
+        var t = tracks[i];
+        html += '<div class="track">';
+        if (t.albumArt) {
+          html += '<img class="track-art" src="' + escHtml(t.albumArt) + '" alt="">';
+        } else {
+          html += '<div class="track-art"></div>';
+        }
+        html += '<div class="track-info">';
+        html += '<div class="track-name">' + escHtml(t.name) + '</div>';
+        html += '<div class="track-artist">' + escHtml(t.artist) + '</div>';
+        html += '</div>';
+        html += '<div class="track-duration">' + formatDuration(t.durationMs) + '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+      app.innerHTML = html;
+    }
+
+    function renderPlaylist(data) {
+      var app = document.getElementById('app');
+      app.innerHTML =
+        '<div class="playlist-card">' +
+          '<div class="playlist-title">' + escHtml(data.name) + '</div>' +
+          '<div class="playlist-meta">' + data.trackCount + ' tracks added</div>' +
+          '<a class="playlist-link" href="' + escHtml(data.url) + '" target="_blank">Open in Spotify</a>' +
+        '</div>';
+    }
+
+    function renderError(msg) {
+      document.getElementById('app').innerHTML =
+        '<div class="error-msg">' + escHtml(msg) + '</div>';
+    }
+
+    function handleToolInvoke(payload) {
+      var invocationId = payload.invocationId;
+      var params = payload.params;
+
+      switch (payload.toolName) {
+        case 'search_tracks':
+          handleSearchTracks(invocationId, params);
+          break;
+        case 'create_playlist':
+          handleCreatePlaylist(invocationId, params);
+          break;
+        default:
+          sendMsg('TOOL_RESULT', {
+            invocationId: invocationId,
+            error: 'Unknown tool: ' + payload.toolName
+          });
+      }
+    }
+
+    function handleSearchTracks(invocationId, params) {
+      var data = params._spotifyData;
+      if (!data) {
+        renderError(params._spotifyError || 'Search failed');
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: params._spotifyError || 'Search failed'
+        });
+        return;
+      }
+
+      renderTracks(data.tracks, 'Results for "' + (params.query || '') + '"');
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: {
+          tracks: data.tracks,
+          query: params.query,
+          message: 'Found ' + data.tracks.length + ' tracks for "' + params.query + '".'
+        }
+      });
+    }
+
+    function handleCreatePlaylist(invocationId, params) {
+      var data = params._spotifyData;
+      if (!data) {
+        renderError(params._spotifyError || 'Failed to create playlist');
+        sendMsg('TOOL_RESULT', {
+          invocationId: invocationId,
+          error: params._spotifyError || 'Failed to create playlist'
+        });
+        return;
+      }
+
+      renderPlaylist(data.playlist);
+      sendMsg('TOOL_RESULT', {
+        invocationId: invocationId,
+        result: {
+          playlistId: data.playlist.id,
+          name: data.playlist.name,
+          url: data.playlist.url,
+          trackCount: data.playlist.trackCount,
+          message: 'Created playlist "' + data.playlist.name + '" with ' + data.playlist.trackCount + ' tracks.'
+        }
+      });
+      sendMsg('PLUGIN_COMPLETE', {
+        summary: 'Created Spotify playlist "' + data.playlist.name + '" with ' + data.playlist.trackCount + ' tracks. Link: ' + data.playlist.url
+      });
+    }
+
+    window.addEventListener('message', function(event) {
+      var msg = event.data;
+      if (!msg || typeof msg !== 'object' || msg.type !== 'TOOL_INVOKE') return;
+      if (msg.pluginId) pluginId = msg.pluginId;
+      if (msg.conversationId) conversationId = msg.conversationId;
+      handleToolInvoke(msg.payload);
+    });
+
+    var urlParams = new URLSearchParams(window.location.search);
+    pluginId = urlParams.get('pluginId') || 'spotify';
+    conversationId = urlParams.get('conversationId') || 'unknown';
+    sendMsg('PLUGIN_READY', {});
+  </script>
+</body>
+</html>

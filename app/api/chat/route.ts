@@ -38,7 +38,13 @@ QUIZZES:
 WEATHER:
 - "what's the weather in [city]?" → immediately call get_weather with that city. Brief response.
 - After result, connect it to learning if relevant (geography, climate, science).
-- Keep weather responses short — 1-2 sentences about the conditions.`
+- Keep weather responses short — 1-2 sentences about the conditions.
+
+SPOTIFY:
+- "make me a playlist about [topic]" → call create_playlist with a name and search query related to the topic.
+- "find songs about [topic]" → call search_tracks with the topic as query.
+- Connect music to learning when possible (e.g., "Here are some songs about space exploration!").
+- Keep responses brief — 1-2 sentences about the results.`
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -324,6 +330,8 @@ export async function POST(request: Request) {
                 enrichedParams = await enrichQuizParams(supabase, call.input)
               } else if (call.name === 'get_weather') {
                 enrichedParams = await enrichWeatherParams(call.input)
+              } else if (call.name === 'search_tracks' || call.name === 'create_playlist') {
+                enrichedParams = await enrichSpotifyParams(user.id, call.name, call.input)
               }
 
               send({
@@ -577,5 +585,96 @@ async function enrichWeatherParams(
     }
   } catch {
     return { ...params, _weatherError: 'Failed to fetch weather data' }
+  }
+}
+
+/**
+ * Enrich Spotify tool params with data fetched server-side.
+ */
+async function enrichSpotifyParams(
+  userId: string,
+  toolName: string,
+  params: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  try {
+    const { getValidToken } = await import('@/lib/oauth-tokens')
+    const token = await getValidToken(userId, 'spotify')
+    if (!token) {
+      return { ...params, _spotifyError: 'Spotify not connected. Connect at /api/auth/oauth/spotify' }
+    }
+
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+    if (toolName === 'search_tracks') {
+      const query = params.query as string
+      if (!query) return { ...params, _spotifyError: 'No search query provided' }
+
+      const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=5`, { headers })
+      if (!res.ok) return { ...params, _spotifyError: 'Spotify search failed' }
+
+      const data = await res.json()
+      const tracks = (data.tracks?.items || []).map((t: { id: string; name: string; artists: { name: string }[]; album: { name: string; images: { url: string }[] }; external_urls: { spotify: string }; duration_ms: number }) => ({
+        id: t.id, name: t.name,
+        artist: t.artists.map((a) => a.name).join(', '),
+        album: t.album.name,
+        albumArt: t.album.images?.[0]?.url || null,
+        url: t.external_urls.spotify,
+        durationMs: t.duration_ms,
+      }))
+      return { ...params, _spotifyData: { tracks } }
+    }
+
+    if (toolName === 'create_playlist') {
+      const name = params.name as string || 'ChatBridge Playlist'
+      const description = params.description as string || 'Created by ChatBridge AI tutor'
+      const query = params.query as string
+
+      // Search for tracks first
+      let trackIds: string[] = []
+      if (query) {
+        const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`, { headers })
+        if (searchRes.ok) {
+          const searchData = await searchRes.json()
+          trackIds = (searchData.tracks?.items || []).map((t: { id: string }) => t.id)
+        }
+      }
+
+      // Get Spotify user ID
+      const meRes = await fetch('https://api.spotify.com/v1/me', { headers })
+      if (!meRes.ok) return { ...params, _spotifyError: 'Failed to get Spotify profile' }
+      const me = await meRes.json()
+
+      // Create playlist
+      const plRes = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ name, description, public: false }),
+      })
+      if (!plRes.ok) return { ...params, _spotifyError: 'Failed to create playlist' }
+      const playlist = await plRes.json()
+
+      // Add tracks
+      if (trackIds.length > 0) {
+        await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ uris: trackIds.map((id) => `spotify:track:${id}`) }),
+        })
+      }
+
+      return {
+        ...params,
+        _spotifyData: {
+          playlist: {
+            id: playlist.id,
+            name: playlist.name,
+            url: playlist.external_urls.spotify,
+            trackCount: trackIds.length,
+          },
+        },
+      }
+    }
+
+    return params
+  } catch {
+    return { ...params, _spotifyError: 'Spotify API error' }
   }
 }
