@@ -665,25 +665,25 @@
       gameOver = true;
       clearTimeout(aiTimeoutId);
       const statusEl = document.getElementById('status');
-      statusEl.textContent = 'Resigned — Black wins';
+      statusEl.textContent = 'AI resigned — White wins!';
       statusEl.className = 'status-bar ended';
       document.getElementById('resignBtn').style.display = 'none';
 
       const history = game.history();
-      const summary = buildGameSummary('loss', 'resignation', history);
+      const summary = buildGameSummary('win', 'resignation', history);
 
       sendMsg('TOOL_RESULT', {
         invocationId: invocationId,
         result: {
           outcome: 'resignation',
-          winner: 'black',
+          winner: 'white',
           fen: game.fen(),
           totalMoves: Math.ceil(history.length / 2),
           summary: summary
         }
       });
 
-      sendMsg('PLUGIN_COMPLETE', { summary: summary, outcome: 'loss' });
+      sendMsg('PLUGIN_COMPLETE', { summary: summary, outcome: 'win' });
     }
 
     function getGameStatus() {

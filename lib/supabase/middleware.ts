@@ -63,23 +63,26 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Content Security Policy — restrict iframe sources to self (registered plugins
-  // are served from the same origin via /plugins/*). Blocks third-party origins
-  // from being loaded in iframes to prevent unauthorized content injection.
-  const appOrigin = request.nextUrl.origin
-  supabaseResponse.headers.set(
-    'Content-Security-Policy',
-    [
-      `default-src 'self'`,
-      `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com https://accounts.google.com https://accounts.spotify.com`,
-      `style-src 'self' 'unsafe-inline'`,
-      `img-src 'self' data: blob: https://api.weather.gov https://i.scdn.co`,
-      `font-src 'self'`,
-      `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} https://unpkg.com https://accounts.google.com https://oauth2.googleapis.com https://classroom.googleapis.com https://api.weather.gov https://geocoding-api.open-meteo.com https://api.spotify.com https://accounts.spotify.com`,
-      `frame-src 'self' ${appOrigin} ${process.env.NEXT_PUBLIC_APP_URL || ''}`,
-      `frame-ancestors 'self'`,
-    ].join('; ')
-  )
+  // Content Security Policy — skip for plugin assets (sandboxed iframes set
+  // origin to "null" which makes 'self' useless and breaks them).
+  // Use report-only for app pages so violations are logged, not enforced,
+  // while we harden the policy.
+  const isPluginAsset = request.nextUrl.pathname.startsWith('/plugins/')
+  if (!isPluginAsset) {
+    supabaseResponse.headers.set(
+      'Content-Security-Policy-Report-Only',
+      [
+        `default-src 'self'`,
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com https://accounts.google.com https://accounts.spotify.com`,
+        `style-src 'self' 'unsafe-inline'`,
+        `img-src 'self' data: blob: https://api.weather.gov https://i.scdn.co`,
+        `font-src 'self'`,
+        `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} https://unpkg.com https://accounts.google.com https://oauth2.googleapis.com https://classroom.googleapis.com https://api.weather.gov https://geocoding-api.open-meteo.com https://api.spotify.com https://accounts.spotify.com`,
+        `frame-src 'self'`,
+        `frame-ancestors 'self'`,
+      ].join('; ')
+    )
+  }
 
   return supabaseResponse
 }

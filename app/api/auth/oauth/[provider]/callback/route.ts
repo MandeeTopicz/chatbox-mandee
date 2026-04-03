@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { OAUTH_PROVIDERS, exchangeCode } from '@/lib/oauth-providers'
 import { encrypt } from '@/lib/crypto'
-import { logger } from '@/lib/logger'
 
 export async function GET(
   request: Request,
@@ -22,11 +21,12 @@ export async function GET(
   const error = searchParams.get('error')
 
   if (error) {
-    logger.warn('oauth.denied', { route: `/api/auth/oauth/${providerKey}/callback`, data: { error } })
+    console.error(`[oauth][${providerKey}] User denied consent:`, error)
     return NextResponse.redirect(new URL(`${provider.successRedirect}?oauth_error=denied`, baseUrl))
   }
 
   if (!code || !state) {
+    console.error(`[oauth][${providerKey}] Missing code or state`)
     return NextResponse.redirect(new URL(`${provider.successRedirect}?oauth_error=missing_params`, baseUrl))
   }
 
@@ -35,12 +35,13 @@ export async function GET(
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
+    console.error(`[oauth][${providerKey}] Auth failed:`, authError?.message)
     return NextResponse.redirect(new URL('/login', baseUrl))
   }
 
   const expectedState = `${user.id}|${providerKey}`
   if (state !== expectedState) {
-    logger.warn('oauth.state_mismatch', { route: `/api/auth/oauth/${providerKey}/callback`, userId: user.id })
+    console.error(`[oauth][${providerKey}] State mismatch: expected ${expectedState}, got ${state}`)
     return NextResponse.redirect(new URL(`${provider.successRedirect}?oauth_error=state_mismatch`, baseUrl))
   }
 
@@ -54,8 +55,9 @@ export async function GET(
 
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
-    // Upsert into google_tokens (now with provider column)
-    const { error: upsertError } = await supabase
+    // Use service client to bypass RLS for token storage
+    const serviceClient = await createServiceClient()
+    const { error: upsertError } = await serviceClient
       .from('google_tokens')
       .upsert({
         user_id: user.id,
@@ -66,15 +68,15 @@ export async function GET(
       }, { onConflict: 'user_id,provider' })
 
     if (upsertError) {
-      logger.error('oauth.store_failed', { route: `/api/auth/oauth/${providerKey}/callback`, userId: user.id, data: { error: upsertError.message } })
+      console.error(`[oauth][${providerKey}] Token store failed:`, upsertError.message)
       return NextResponse.redirect(new URL(`${provider.successRedirect}?oauth_error=store_failed`, baseUrl))
     }
 
-    logger.info('oauth.connected', { route: `/api/auth/oauth/${providerKey}/callback`, userId: user.id, data: { provider: providerKey } })
+    console.log(`[oauth][${providerKey}] Connected successfully for user ${user.id}`)
     return NextResponse.redirect(new URL(`${provider.successRedirect}?oauth_connected=${providerKey}`, baseUrl))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Token exchange failed'
-    logger.error('oauth.token_exchange_failed', { route: `/api/auth/oauth/${providerKey}/callback`, userId: user.id, data: { error: message } })
+    console.error(`[oauth][${providerKey}] Token exchange failed:`, message)
     return NextResponse.redirect(new URL(`${provider.successRedirect}?oauth_error=token_exchange`, baseUrl))
   }
 }

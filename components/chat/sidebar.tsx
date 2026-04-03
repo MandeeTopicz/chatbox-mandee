@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { logout } from '@/app/auth/actions'
-import { MessageSquarePlus, LogOut, Trash2, Trophy, BookOpen, Crown, LineChart, Layers, CloudSun, LayoutDashboard } from 'lucide-react'
+import { MessageSquarePlus, LogOut, Trash2, Trophy, BookOpen, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Conversation {
@@ -109,19 +109,6 @@ export function Sidebar({
     onNavigate?.()
   }
 
-  function startNewChatWithPrompt(prompt: string) {
-    if (pathname === '/chat') {
-      window.dispatchEvent(new Event('reset-chat'))
-    } else {
-      router.push('/chat')
-    }
-    onNavigate?.()
-    // Wait for ChatInterface to mount/reset, then send the prompt
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('starter-prompt', { detail: prompt }))
-    }, 150)
-  }
-
   const isStudent = role === 'student'
 
   // Student gets a dark indigo sidebar
@@ -155,52 +142,15 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Tool shortcut buttons */}
-        <div className="flex items-center gap-2 border-b border-indigo-800 px-4 py-2.5">
-          <button
-            onClick={() => {
-              startNewChatWithPrompt("Let's play a game of chess! I'll be white.")
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-800 text-indigo-400 transition-colors duration-150 hover:bg-indigo-700 hover:text-indigo-300"
-            title="Start a chess game"
-          >
-            <Crown className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => {
-              startNewChatWithPrompt('Can you graph the equation y = x^2 - 4?')
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-800 text-indigo-400 transition-colors duration-150 hover:bg-indigo-700 hover:text-indigo-300"
-            title="Open graphing calculator"
-          >
-            <LineChart className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => {
-              startNewChatWithPrompt('Start a flashcard quiz for me!')
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-800 text-indigo-400 transition-colors duration-150 hover:bg-indigo-700 hover:text-indigo-300"
-            title="Start a flashcard quiz"
-          >
-            <Layers className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => {
-              startNewChatWithPrompt("What's the weather in New York?")
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-800 text-indigo-400 transition-colors duration-150 hover:bg-indigo-700 hover:text-indigo-300"
-            title="Check the weather"
-          >
-            <CloudSun className="h-4 w-4" />
-          </button>
-          <div className="flex-1" />
+        {/* New chat button */}
+        <div className="flex items-center border-b border-indigo-800 px-4 py-2.5">
           <button
             onClick={startNewChat}
-            className="flex h-8 items-center gap-1.5 rounded-lg bg-amber-400 px-3 text-xs font-semibold text-indigo-950 transition-colors duration-150 hover:bg-amber-300"
+            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-amber-400 px-3 text-xs font-semibold text-indigo-950 transition-colors duration-150 hover:bg-amber-300"
             title="New chat"
           >
             <MessageSquarePlus className="h-3.5 w-3.5" />
-            New
+            New Chat
           </button>
         </div>
 

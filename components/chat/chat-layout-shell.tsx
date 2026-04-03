@@ -3,6 +3,7 @@
 import { createContext, useContext, useState } from 'react'
 import { Menu } from 'lucide-react'
 import { Sidebar } from '@/components/chat/sidebar'
+import { AppSidebar } from '@/components/chat/app-sidebar'
 
 export interface UserProfileContext {
   userId: string
@@ -91,6 +92,13 @@ export function ChatLayoutShell({
           </div>
           {children}
         </main>
+
+        {/* Right app sidebar — students only, hidden on mobile */}
+        {role === 'student' && (
+          <div className="hidden md:block">
+            <AppSidebar />
+          </div>
+        )}
       </div>
     </ProfileContext.Provider>
   )
