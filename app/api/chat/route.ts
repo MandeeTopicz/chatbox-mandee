@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/types'
 import { checkRateLimit, CHAT_LIMIT, TOOL_LIMIT } from '@/lib/rate-limit'
 import { validateToolResult } from '@/lib/tool-result-validator'
+import { logger } from '@/lib/logger'
+
+const ROUTE = '/api/chat'
 
 const anthropic = new Anthropic()
 
@@ -17,7 +20,9 @@ RESPONSE STYLE:
 
 CHESS:
 - "let's play chess" → immediately call start_chess_game. Brief response like "Board's ready! You're white — make your first move."
-- When it's your turn as black, call make_move with your chosen move. Keep commentary to 1-2 sentences about the move.
+- When it's your turn as black, you MUST call make_move with {from, to} squares. Do NOT just describe your move in words — you must use the tool. Keep commentary to 1-2 sentences.
+- Vary your openings! Randomly pick from: Sicilian (c5), French (e6), Caro-Kann (c6), Scandinavian (d5), Pirc (d6/Nf6), Dutch (f5), King's Indian setups, or other sound responses. Never play the same opening twice in a row.
+- Play strong, creative chess. Adapt your style to the position — be tactical when ahead, solid when behind.
 - "what should I do?" → call get_board_state, give brief tactical advice.
 - After game ends, give a short 2-3 sentence summary of key moments.
 
@@ -28,7 +33,12 @@ GRAPHING:
 QUIZZES:
 - "quiz me on [topic]" → immediately call start_quiz with that topic. Do NOT list available topics unless the student asks "what quizzes are available?"
 - After quiz completes, focus on missed questions. 1 sentence per weak area.
-- If the student asks for a topic that doesn't exist, say so briefly and suggest they ask what's available.`
+- If the student asks for a topic that doesn't exist, say so briefly and suggest they ask what's available.
+
+WEATHER:
+- "what's the weather in [city]?" → immediately call get_weather with that city. Brief response.
+- After result, connect it to learning if relevant (geography, climate, science).
+- Keep weather responses short — 1-2 sentences about the conditions.`
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -39,12 +49,14 @@ export async function POST(request: Request) {
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
+    logger.warn('auth.unauthorized', { route: ROUTE })
     return new Response('Unauthorized', { status: 401 })
   }
 
   // Rate limiting: 60 chat requests/min per user
   const chatLimit = checkRateLimit(`chat:${user.id}`, CHAT_LIMIT.maxRequests, CHAT_LIMIT.windowMs)
   if (!chatLimit.allowed) {
+    logger.warn('rate_limit.chat', { route: ROUTE, userId: user.id, data: { resetInMs: chatLimit.resetInMs } })
     return new Response(
       JSON.stringify({
         error: 'Rate limited',
@@ -64,10 +76,13 @@ export async function POST(request: Request) {
     return new Response('Message or toolResult is required', { status: 400 })
   }
 
+  logger.info('chat.request', { route: ROUTE, userId: user.id, data: { hasMessage: !!message, hasToolResult: !!toolResult, conversationId: conversationId || 'new' } })
+
   // Rate limiting for tool invocations: 30/min per user
   if (toolResult) {
     const toolLimit = checkRateLimit(`tool:${user.id}`, TOOL_LIMIT.maxRequests, TOOL_LIMIT.windowMs)
     if (!toolLimit.allowed) {
+      logger.warn('rate_limit.tool', { route: ROUTE, userId: user.id })
       return new Response(
         JSON.stringify({
           error: 'Rate limited',
@@ -129,8 +144,10 @@ export async function POST(request: Request) {
     // Validate and sanitize the tool result before storing/injecting into Claude context
     const toolName = toolResult.toolName || 'unknown'
     const validation = validateToolResult(toolName, toolResult.result)
+    const passed = validation.warnings.length === 0
+    logger.info('tool_result.received', { route: ROUTE, userId: user.id, data: { toolName, passed, warnings: validation.warnings.length } })
     if (validation.warnings.length > 0) {
-      console.warn('[tool-result-validation]', validation.warnings.join('; '))
+      logger.warn('tool_result.validation_warnings', { route: ROUTE, userId: user.id, data: { toolName, warnings: validation.warnings } })
     }
     const sanitizedResult = validation.sanitized
 
@@ -300,10 +317,13 @@ export async function POST(request: Request) {
           for (const call of toolCalls) {
             const pluginInfo = pluginToolMap[call.name]
             if (pluginInfo) {
-              // Enrich start_quiz with quiz data (iframe can't fetch it)
+              logger.info('tool.invoked', { route: ROUTE, userId: user.id, data: { toolName: call.name, pluginName: pluginInfo.pluginName } })
+              // Enrich tool params with server-side data (iframes can't fetch)
               let enrichedParams = call.input
               if (call.name === 'start_quiz') {
                 enrichedParams = await enrichQuizParams(supabase, call.input)
+              } else if (call.name === 'get_weather') {
+                enrichedParams = await enrichWeatherParams(call.input)
               }
 
               send({
@@ -330,6 +350,7 @@ export async function POST(request: Request) {
         send({ type: 'done', stopReason: response.stop_reason })
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        logger.error('chat.stream_error', { route: ROUTE, userId: user.id, data: { error: errorMessage } })
         send({ type: 'error', error: errorMessage })
       } finally {
         controller.close()
@@ -481,4 +502,80 @@ async function enrichQuizParams(
   }
 
   return params // Return original if enrichment fails
+}
+
+/**
+ * Enrich get_weather tool params with actual weather data fetched server-side.
+ * Uses weather.gov (free, no API key) with Open-Meteo geocoding for city→coords.
+ * Sandboxed iframes cannot make fetch requests, so we fetch here and pass
+ * the result via the TOOL_INVOKE payload.
+ */
+async function enrichWeatherParams(
+  params: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const city = params.city as string | undefined
+  if (!city) return { ...params, _weatherError: 'No city specified' }
+
+  const headers = { 'User-Agent': 'ChatBridge/1.0 (education platform)' }
+
+  try {
+    // Step 1: Geocode city name to coordinates via Open-Meteo (free, no key)
+    const geoRes = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`
+    )
+    if (!geoRes.ok) return { ...params, _weatherError: 'Geocoding service unavailable' }
+
+    const geoData = await geoRes.json()
+    if (!geoData.results || geoData.results.length === 0) {
+      return { ...params, _weatherError: `City "${city}" not found. Try a major city name.` }
+    }
+
+    const { latitude, longitude, name: resolvedCity, country, admin1 } = geoData.results[0]
+
+    // Step 2: Get weather.gov grid point for the coordinates
+    const pointsRes = await fetch(
+      `https://api.weather.gov/points/${latitude.toFixed(4)},${longitude.toFixed(4)}`,
+      { headers }
+    )
+    if (!pointsRes.ok) {
+      // weather.gov only covers US locations
+      return { ...params, _weatherError: `Weather data not available for ${resolvedCity}. weather.gov only covers US locations.` }
+    }
+
+    const pointsData = await pointsRes.json()
+    const forecastUrl = pointsData.properties?.forecast
+
+    if (!forecastUrl) {
+      return { ...params, _weatherError: 'Could not determine forecast grid' }
+    }
+
+    // Step 3: Fetch the actual forecast
+    const forecastRes = await fetch(forecastUrl, { headers })
+    if (!forecastRes.ok) return { ...params, _weatherError: 'Forecast service unavailable' }
+
+    const forecastData = await forecastRes.json()
+    const current = forecastData.properties?.periods?.[0]
+
+    if (!current) return { ...params, _weatherError: 'No forecast data available' }
+
+    return {
+      ...params,
+      _weatherData: {
+        city: resolvedCity,
+        country: country || 'US',
+        region: admin1 || '',
+        temp: current.temperature,
+        temp_unit: current.temperatureUnit,
+        description: current.shortForecast,
+        detail: current.detailedForecast,
+        wind_speed: current.windSpeed,
+        wind_direction: current.windDirection,
+        period: current.name,
+        icon: current.icon,
+        is_daytime: current.isDaytime,
+      },
+    }
+  } catch {
+    return { ...params, _weatherError: 'Failed to fetch weather data' }
+  }
 }

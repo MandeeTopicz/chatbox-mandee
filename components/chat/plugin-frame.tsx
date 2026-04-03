@@ -7,7 +7,52 @@ import {
   type InboundPluginMessage,
   type ToolInvokeMessage,
 } from '@/lib/plugin-protocol'
-import { Loader2, X, AlertTriangle } from 'lucide-react'
+import { Loader2, X, AlertTriangle, Crown, LineChart, Layers, CloudSun } from 'lucide-react'
+
+// Log events to console — Sentry capture is server-only to avoid bundling OpenTelemetry
+function captureEvent(event: { message: string; level: string; tags?: Record<string, unknown>; extra?: Record<string, unknown> }) {
+  console.warn(`[sentry-event] ${event.message}`, event.tags, event.extra)
+}
+
+const PLUGIN_THEMES: Record<string, { headerBg: string; bodyBg: string; text: string; closeHover: string; icon: typeof Crown; height: string }> = {
+  chess: {
+    headerBg: 'bg-green-700',
+    bodyBg: 'bg-green-50/50',
+    text: 'text-white',
+    closeHover: 'hover:bg-green-600',
+    icon: Crown,
+    height: 'h-96',
+  },
+  'graphing-calculator': {
+    headerBg: 'bg-blue-700',
+    bodyBg: 'bg-blue-50/50',
+    text: 'text-white',
+    closeHover: 'hover:bg-blue-600',
+    icon: LineChart,
+    height: 'h-[440px]',
+  },
+  'flashcard-quiz': {
+    headerBg: 'bg-amber-600',
+    bodyBg: 'bg-amber-50/50',
+    text: 'text-white',
+    closeHover: 'hover:bg-amber-500',
+    icon: Layers,
+    height: 'h-96',
+  },
+  weather: {
+    headerBg: 'bg-sky-600',
+    bodyBg: 'bg-sky-50/50',
+    text: 'text-white',
+    closeHover: 'hover:bg-sky-500',
+    icon: CloudSun,
+    height: 'h-[420px]',
+  },
+}
+
+function getPluginTheme(pluginName: string) {
+  const key = pluginName.toLowerCase().replace(/\s+/g, '-')
+  return PLUGIN_THEMES[key] ?? null
+}
 
 export interface PluginInvocation {
   toolUseId: string
@@ -83,15 +128,14 @@ export function PluginFrame({
       pendingInvokeRef.current = msg
     }
 
-    // Timeout: if no TOOL_RESULT within 10 seconds of TOOL_INVOKE
+    // Timeout: if no TOOL_RESULT within 30 seconds of TOOL_INVOKE
     const timeout = setTimeout(() => {
       if (!toolResultReceivedRef.current) {
-        setError('Plugin did not respond within 10 seconds')
+        setError('Plugin did not respond within 30 seconds')
         setFailureCount((prev) => prev + 1)
-        // Send a synthetic error result so Claude can recover
         onToolResult(invocation.toolUseId, { error: 'Plugin timed out — no response received.' })
       }
-    }, 10_000)
+    }, 30_000)
 
     return () => clearTimeout(timeout)
   }, [invocation.toolUseId]) // Key off toolUseId — changes when a new invocation arrives
@@ -105,7 +149,15 @@ export function PluginFrame({
       const fromOurIframe = event.source === iframeRef.current?.contentWindow
       const originMatches = event.origin === expectedOrigin
       const fromSandboxedIframe = event.origin === 'null'
-      if (!fromOurIframe && !originMatches && !fromSandboxedIframe) return
+      if (!fromOurIframe && !originMatches && !fromSandboxedIframe) {
+        captureEvent({
+          message: 'postmessage.origin_rejected',
+          level: 'warning',
+          tags: { pluginName: invocation.pluginName },
+          extra: { rejectedOrigin: event.origin, expectedOrigin },
+        })
+        return
+      }
 
       const msg = validateInboundMessage(event.data)
       if (!msg) return
@@ -126,11 +178,13 @@ export function PluginFrame({
 
         case 'TOOL_RESULT':
           toolResultReceivedRef.current = true // Cancel the timeout
+          // Tool result errors (e.g. illegal chess moves) are game logic errors,
+          // NOT plugin failures. Don't increment failureCount — the plugin is
+          // working correctly by reporting the error. Only timeouts and
+          // PLUGIN_ERROR count toward disabling.
           if (msg.payload.error) {
             setError(msg.payload.error)
-            setFailureCount((prev) => prev + 1)
           } else {
-            setFailureCount(0)
             setError(null)
           }
           onToolResult(msg.payload.invocationId, msg.payload.error ? { error: msg.payload.error } : msg.payload.result)
@@ -148,7 +202,7 @@ export function PluginFrame({
         case 'PLUGIN_ERROR':
           setFailureCount((prev) => prev + 1)
           setError(msg.payload.message)
-          if (failureCount + 1 >= 3) {
+          if (failureCount + 1 >= 6) {
             setError('Plugin disabled: too many consecutive errors')
           }
           break
@@ -166,13 +220,19 @@ export function PluginFrame({
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (!readyRef.current) {
-        setError('Plugin failed to load within 10 seconds')
+        setError('Plugin failed to load within 30 seconds')
       }
-    }, 10_000)
+    }, 30_000)
     return () => clearTimeout(timeout)
   }, [])
 
-  if (failureCount >= 3) {
+  if (failureCount >= 6) {
+    captureEvent({
+      message: 'circuit_breaker.triggered',
+      level: 'warning',
+      tags: { pluginName: invocation.pluginName, pluginId: invocation.pluginId },
+      extra: { failureCount },
+    })
     return (
       <div className="border-t bg-destructive/5 p-4">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
@@ -189,26 +249,45 @@ export function PluginFrame({
     )
   }
 
+  const theme = getPluginTheme(invocation.pluginName)
+  const ThemeIcon = theme?.icon ?? null
+
   return (
-    <div className="border-t bg-muted/30">
+    <div
+      className="border-t"
+      style={{ animation: 'plugin-slide-in 200ms ease-out both' }}
+    >
+      <style>{`
+        @keyframes plugin-slide-in {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-center justify-between border-b px-4 py-2">
+        <div className={`flex items-center justify-between px-4 py-2.5 ${theme ? theme.headerBg : 'bg-muted'}`}>
           <div className="flex items-center gap-2">
-            {!ready && <Loader2 className="h-4 w-4 animate-spin" />}
-            <span className="text-sm font-medium">{invocation.pluginName}</span>
-            {error && <span className="text-xs text-destructive">{error}</span>}
+            {!ready && <Loader2 className={`h-4 w-4 animate-spin ${theme?.text ?? ''}`} />}
+            {ThemeIcon && <ThemeIcon className={`h-4 w-4 ${theme?.text ?? ''}`} />}
+            <span className={`text-sm font-semibold ${theme?.text ?? ''}`}>{invocation.pluginName}</span>
+            {error && <span className="text-xs text-red-200">{error}</span>}
           </div>
-          <button onClick={onClose} className="rounded p-1 hover:bg-accent" title="Close plugin">
+          <button
+            onClick={onClose}
+            className={`rounded p-1 transition-colors duration-150 ${theme?.text ?? ''} ${theme?.closeHover ?? 'hover:bg-accent'}`}
+            title="Close plugin"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <iframe
-          ref={iframeRef}
-          src={buildPluginUrl(invocation.pluginUrl, invocation.pluginId, conversationId)}
-          sandbox="allow-scripts"
-          className="h-96 w-full border-0"
-          title={`${invocation.pluginName} plugin`}
-        />
+        <div className={theme?.bodyBg ?? 'bg-muted/30'}>
+          <iframe
+            ref={iframeRef}
+            src={buildPluginUrl(invocation.pluginUrl, invocation.pluginId, conversationId)}
+            sandbox="allow-scripts"
+            className={`${theme?.height ?? 'h-96'} w-full border-0`}
+            title={`${invocation.pluginName} plugin`}
+          />
+        </div>
       </div>
     </div>
   )

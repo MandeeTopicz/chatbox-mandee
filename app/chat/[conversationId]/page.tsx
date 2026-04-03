@@ -1,10 +1,25 @@
-import { ChatInterface } from '@/components/chat/chat-interface'
+'use client'
 
-export default async function ConversationPage({
-  params,
-}: {
-  params: Promise<{ conversationId: string }>
-}) {
-  const { conversationId } = await params
-  return <ChatInterface conversationId={conversationId} />
+import { ChatInterface } from '@/components/chat/chat-interface'
+import { useUserProfile } from '@/components/chat/chat-layout-shell'
+import { useParams } from 'next/navigation'
+
+export default function ConversationPage() {
+  const { conversationId } = useParams<{ conversationId: string }>()
+  const profile = useUserProfile()
+
+  return (
+    <ChatInterface
+      conversationId={conversationId}
+      userProfile={
+        profile
+          ? {
+              displayName: profile.displayName,
+              role: profile.role,
+              isFirstLogin: profile.isFirstLogin,
+            }
+          : undefined
+      }
+    />
+  )
 }

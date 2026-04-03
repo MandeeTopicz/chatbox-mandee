@@ -6,17 +6,40 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type UserRole = 'student' | 'teacher'
+export type UserRole = 'student' | 'teacher' | 'admin'
 
 export interface Database {
   public: {
     Tables: {
+      schools: {
+        Row: {
+          id: string
+          name: string
+          district: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          district?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          district?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           id: string
           email: string
           role: UserRole
           display_name: string | null
+          school_id: string | null
+          first_login: boolean
           created_at: string
         }
         Insert: {
@@ -24,6 +47,8 @@ export interface Database {
           email: string
           role?: UserRole
           display_name?: string | null
+          school_id?: string | null
+          first_login?: boolean
           created_at?: string
         }
         Update: {
@@ -31,6 +56,8 @@ export interface Database {
           email?: string
           role?: UserRole
           display_name?: string | null
+          school_id?: string | null
+          first_login?: boolean
           created_at?: string
         }
         Relationships: [
@@ -39,6 +66,13 @@ export interface Database {
             columns: ['id']
             isOneToOne: true
             referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'users_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
             referencedColumns: ['id']
           },
         ]
@@ -224,6 +258,7 @@ export interface Database {
           title: string
           topic: string
           cards: Json
+          school_id: string | null
           created_at: string
         }
         Insert: {
@@ -232,6 +267,7 @@ export interface Database {
           title: string
           topic: string
           cards: Json
+          school_id?: string | null
           created_at?: string
         }
         Update: {
@@ -240,6 +276,7 @@ export interface Database {
           title?: string
           topic?: string
           cards?: Json
+          school_id?: string | null
           created_at?: string
         }
         Relationships: [
@@ -247,6 +284,87 @@ export interface Database {
             foreignKeyName: 'quizzes_teacher_id_fkey'
             columns: ['teacher_id']
             isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'quizzes_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      quiz_attempts: {
+        Row: {
+          id: string
+          student_id: string
+          quiz_id: string
+          score: number
+          total: number
+          completed_at: string
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          quiz_id: string
+          score?: number
+          total?: number
+          completed_at?: string
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          quiz_id?: string
+          score?: number
+          total?: number
+          completed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'quiz_attempts_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'quiz_attempts_quiz_id_fkey'
+            columns: ['quiz_id']
+            isOneToOne: false
+            referencedRelation: 'quizzes'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      google_tokens: {
+        Row: {
+          user_id: string
+          access_token: string
+          refresh_token: string
+          expires_at: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          access_token: string
+          refresh_token: string
+          expires_at: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          access_token?: string
+          refresh_token?: string
+          expires_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'google_tokens_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
             referencedRelation: 'users'
             referencedColumns: ['id']
           },

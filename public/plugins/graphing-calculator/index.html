@@ -210,10 +210,14 @@
       }
 
       // Show equation
-      document.getElementById('eqBar').style.display = 'block';
-      document.getElementById('eqDisplay').textContent = 'y = ' + equation;
-      document.getElementById('loadingMsg').style.display = 'none';
-      document.getElementById('errorMsg').textContent = '';
+      var eqBar = document.getElementById('eqBar');
+      var eqDisplay = document.getElementById('eqDisplay');
+      var loadingMsg = document.getElementById('loadingMsg');
+      var errorMsg = document.getElementById('errorMsg');
+      if (eqBar) eqBar.style.display = 'block';
+      if (eqDisplay) eqDisplay.textContent = 'y = ' + equation;
+      if (loadingMsg) loadingMsg.style.display = 'none';
+      if (errorMsg) errorMsg.textContent = '';
 
       // Render graph with function-plot
       try {

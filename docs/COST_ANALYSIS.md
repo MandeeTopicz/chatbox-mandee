@@ -52,6 +52,18 @@ With prompt caching at scale (10,000+ users):
 | 10,000 users | $2,430 | $2,070 | 15% |
 | 100,000 users | $24,300 | $20,655 | 15% |
 
+## Google Classroom API
+
+Google Classroom API calls (listing courses, creating assignments) are **free** and do not consume any LLM tokens. They are direct REST calls to Google's API using the teacher's OAuth tokens. These calls:
+- Do not route through Claude
+- Do not count toward Anthropic API usage
+- Are not rate-limited by ChatBridge (Google has its own quotas)
+- Have no per-call cost from Google
+
+The `post_to_classroom` tool registered as a plugin can be invoked by Claude, but the tool call itself only costs the standard tool-use tokens (~300 input, ~100 output). The actual Google API call that follows is free.
+
+---
+
 ## Infrastructure Costs
 
 | Service | Free tier | Paid tier (est.) |

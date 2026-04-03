@@ -14,8 +14,37 @@
       align-items: flex-start;
       padding: 12px;
       background: #f8f9fa;
-      gap: 16px;
+      gap: 0;
     }
+
+    /* Captured pieces tray */
+    .captured-tray {
+      width: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding-top: 4px;
+    }
+    .captured-tray .tray-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .captured-tray .captured-piece {
+      font-size: 18px;
+      line-height: 1;
+    }
+    .captured-tray .tray-score {
+      font-size: 10px;
+      font-weight: 700;
+      margin-top: 4px;
+      color: #666;
+    }
+
     .board-container { position: relative; }
     .board {
       display: grid;
@@ -31,6 +60,23 @@
       user-select: none; position: relative;
       transition: background-color 0.1s;
     }
+    /* Piece styling: use text-shadow trick to fill white pieces */
+    .square .piece-white {
+      color: #fff;
+      text-shadow:
+        -0.5px -0.5px 0 #333,
+         0.5px -0.5px 0 #333,
+        -0.5px  0.5px 0 #333,
+         0.5px  0.5px 0 #333,
+         0    -1px   0 #333,
+         0     1px   0 #333,
+        -1px   0     0 #333,
+         1px   0     0 #333;
+    }
+    .square .piece-black {
+      color: #333;
+    }
+
     .square.light { background: #f0d9b5; }
     .square.dark { background: #b58863; }
     .square.selected { background: #829769 !important; }
@@ -38,13 +84,20 @@
       content: '';
       position: absolute;
       width: 14px; height: 14px;
-      background: rgba(0,0,0,0.15);
+      background: rgba(0,0,0,0.2);
       border-radius: 50%;
+      z-index: 2;
     }
     .square.legal-target.has-piece::after {
       width: 40px; height: 40px;
       background: transparent;
-      border: 3px solid rgba(0,0,0,0.2);
+      border: 3px solid rgba(0,0,0,0.25);
+      z-index: 2;
+    }
+    .square .piece-white,
+    .square .piece-black {
+      position: relative;
+      z-index: 1;
     }
     .square.last-move { background: rgba(155, 199, 0, 0.4) !important; }
     .coords-rank {
@@ -65,6 +118,7 @@
     .panel {
       min-width: 160px;
       font-size: 13px;
+      margin-left: 16px;
     }
     .panel h3 {
       font-size: 14px;
@@ -81,6 +135,7 @@
       text-align: center;
     }
     .status-bar.playing { background: #dcfce7; color: #166534; }
+    .status-bar.thinking { background: #eff6ff; color: #1e40af; }
     .status-bar.ended { background: #fee2e2; color: #991b1b; }
     .status-bar.draw { background: #fef3c7; color: #92400e; }
 
@@ -119,17 +174,29 @@
     .btn.danger { border-color: #fca5a5; color: #dc2626; }
     .btn.danger:hover { background: #fef2f2; }
 
-    /* Unicode chess pieces */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .thinking-pulse { animation: pulse 1.5s ease-in-out infinite; }
   </style>
 </head>
 <body>
+  <!-- Black's captured pieces (pieces White took) -->
+  <div class="captured-tray" id="whiteCaptured"></div>
+
   <div class="board-container">
     <div class="board" id="board"></div>
   </div>
+
+  <!-- White's captured pieces (pieces Black took) -->
+  <div class="captured-tray" id="blackCaptured"></div>
+
   <div class="panel">
     <div class="status-bar playing" id="status">White to move</div>
     <h3>Moves</h3>
     <div class="move-list" id="moveList"></div>
+    <button class="btn" id="retryBtn" onclick="handleRetry()" style="display:none;">Nudge AI to move</button>
     <button class="btn danger" id="resignBtn" onclick="handleResign()">Resign</button>
   </div>
 
@@ -141,12 +208,16 @@
     let gameOver = false;
     let pluginId = null;
     let conversationId = null;
+    let capturedByWhite = []; // pieces White captured (Black's pieces)
+    let capturedByBlack = []; // pieces Black captured (White's pieces)
 
-    // Unicode piece map
-    const PIECES = {
-      'wK': '\u2654', 'wQ': '\u2655', 'wR': '\u2656', 'wB': '\u2657', 'wN': '\u2658', 'wP': '\u2659',
-      'bK': '\u265A', 'bQ': '\u265B', 'bR': '\u265C', 'bB': '\u265D', 'bN': '\u265E', 'bP': '\u265F'
+    // Unicode piece map — we'll use the FILLED black set for both colors
+    // and style white pieces with CSS (white fill + dark outline)
+    const PIECE_CHARS = {
+      K: '\u265A', Q: '\u265B', R: '\u265C', B: '\u265D', N: '\u265E', P: '\u265F'
     };
+    const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+    const PIECE_ORDER = ['q', 'r', 'b', 'n', 'p'];
 
     // ===== Board Rendering =====
     function renderBoard() {
@@ -165,20 +236,17 @@
           sq.className = 'square ' + (isLight ? 'light' : 'dark');
           sq.dataset.square = squareName;
 
-          // Highlight selected square
           if (selectedSquare === squareName) {
             sq.classList.add('selected');
           }
 
-          // Highlight last move
           if (lastMove && (squareName === lastMove.from || squareName === lastMove.to)) {
             sq.classList.add('last-move');
           }
 
-          // Show legal move targets
           if (selectedSquare) {
             const legalMoves = game.moves({ square: selectedSquare, verbose: true });
-            const isTarget = legalMoves.some(m => m.to === squareName);
+            const isTarget = legalMoves.some(function(m) { return m.to === squareName; });
             if (isTarget) {
               sq.classList.add('legal-target');
               if (board[row][col]) sq.classList.add('has-piece');
@@ -188,8 +256,10 @@
           // Place piece
           const piece = board[row][col];
           if (piece) {
-            const key = (piece.color === 'w' ? 'w' : 'b') + piece.type.toUpperCase();
-            sq.textContent = PIECES[key] || '';
+            const span = document.createElement('span');
+            span.textContent = PIECE_CHARS[piece.type.toUpperCase()] || '';
+            span.className = piece.color === 'w' ? 'piece-white' : 'piece-black';
+            sq.appendChild(span);
           }
 
           // Coordinate labels
@@ -206,10 +276,45 @@
             sq.appendChild(fileLabel);
           }
 
-          sq.addEventListener('click', () => handleSquareClick(squareName));
+          sq.addEventListener('click', function() { handleSquareClick(squareName); });
           boardEl.appendChild(sq);
         }
       }
+    }
+
+    function renderCaptured() {
+      renderCapturedTray('whiteCaptured', capturedByWhite, 'w');
+      renderCapturedTray('blackCaptured', capturedByBlack, 'b');
+    }
+
+    function renderCapturedTray(elId, captured, capturedByColor) {
+      const el = document.getElementById(elId);
+      var sorted = captured.slice().sort(function(a, b) {
+        return PIECE_ORDER.indexOf(a) - PIECE_ORDER.indexOf(b);
+      });
+
+      // Calculate material advantage (this side's captures minus opponent's captures)
+      var myTotal = 0;
+      for (var i = 0; i < captured.length; i++) {
+        myTotal += PIECE_VALUES[captured[i]] || 0;
+      }
+      var opponentCaptures = capturedByColor === 'w' ? capturedByBlack : capturedByWhite;
+      var opponentTotal = 0;
+      for (var k = 0; k < opponentCaptures.length; k++) {
+        opponentTotal += PIECE_VALUES[opponentCaptures[k]] || 0;
+      }
+      var advantage = myTotal - opponentTotal;
+
+      var html = '';
+      for (var j = 0; j < sorted.length; j++) {
+        var charKey = sorted[j].toUpperCase();
+        var cssClass = capturedByColor === 'w' ? 'piece-black' : 'piece-white';
+        html += '<span class="captured-piece ' + cssClass + '">' + (PIECE_CHARS[charKey] || '') + '</span>';
+      }
+      if (advantage > 0) {
+        html += '<span class="tray-score">+' + advantage + '</span>';
+      }
+      el.innerHTML = html;
     }
 
     function renderMoveList() {
@@ -261,7 +366,7 @@
         endGame('draw', 'threefold repetition');
       } else if (waitingForAI) {
         statusEl.textContent = 'AI is thinking...';
-        statusEl.className = 'status-bar playing';
+        statusEl.className = 'status-bar thinking thinking-pulse';
       } else {
         const turn = game.turn() === 'w' ? 'White' : 'Black';
         let status = turn + ' to move';
@@ -272,31 +377,41 @@
     }
 
     // ===== User Interaction =====
-    // Student plays as white only. Board is locked during black's turn (AI).
     let waitingForAI = false;
+    let aiTimeoutId = null;
 
     function handleSquareClick(square) {
       if (gameOver) return;
-      if (waitingForAI) return; // Board locked while AI is thinking
-      if (game.turn() !== 'w') return; // Only white can click
+      if (waitingForAI) return;
+      if (game.turn() !== 'w') return;
 
       if (selectedSquare) {
-        // Try to make the move
         const move = game.move({ from: selectedSquare, to: square, promotion: 'q' });
         if (move) {
           lastMove = { from: move.from, to: move.to };
+          if (move.captured) {
+            capturedByWhite.push(move.captured);
+          }
           selectedSquare = null;
           renderBoard();
+          renderCaptured();
           renderMoveList();
           updateStatus();
           if (!gameOver) {
-            // Signal that it's the AI's turn
             waitingForAI = true;
             sendStateUpdate(move.san);
-            updateStatus(); // Re-render to show "AI is thinking..."
+            updateStatus();
+            // Safety timeout: show retry button if AI doesn't respond in 30s
+            clearTimeout(aiTimeoutId);
+            aiTimeoutId = setTimeout(function() {
+              if (waitingForAI) {
+                waitingForAI = false;
+                document.getElementById('retryBtn').style.display = 'block';
+                updateStatus();
+              }
+            }, 30000);
           }
         } else {
-          // If clicking on own piece, reselect
           const piece = game.get(square);
           if (piece && piece.color === 'w') {
             selectedSquare = square;
@@ -306,13 +421,30 @@
           renderBoard();
         }
       } else {
-        // Select a piece — white only
         const piece = game.get(square);
         if (piece && piece.color === 'w') {
           selectedSquare = square;
           renderBoard();
         }
       }
+    }
+
+    function handleRetry() {
+      if (gameOver) return;
+      if (game.turn() !== 'b') return; // Only retry if it's AI's turn
+      document.getElementById('retryBtn').style.display = 'none';
+      waitingForAI = true;
+      updateStatus();
+      // Re-send state update to trigger another AI response
+      sendStateUpdate('retry');
+      clearTimeout(aiTimeoutId);
+      aiTimeoutId = setTimeout(function() {
+        if (waitingForAI) {
+          waitingForAI = false;
+          document.getElementById('retryBtn').style.display = 'block';
+          updateStatus();
+        }
+      }, 30000);
     }
 
     function handleResign() {
@@ -346,10 +478,7 @@
     function endGame(outcome, reason) {
       const history = game.history();
       const summary = buildGameSummary(outcome, reason, history);
-
-      // Post result to the auth API for profile tracking
       postGameResult(outcome);
-
       sendMsg('PLUGIN_COMPLETE', { summary: summary, outcome: outcome });
     }
 
@@ -366,11 +495,7 @@
     }
 
     function postGameResult(outcome) {
-      // Sandboxed iframes cannot make fetch requests.
-      // Instead, include the outcome in PLUGIN_COMPLETE summary so the
-      // platform can post the result via the chess API on our behalf.
-      // The outcome is parsed from the summary by ChatInterface.
-      // (This is a no-op — result posting moved to platform side.)
+      // No-op: result posting handled by platform via PLUGIN_COMPLETE payload
     }
 
     // ===== Tool Handlers =====
@@ -400,9 +525,13 @@
       lastMove = null;
       gameOver = false;
       waitingForAI = false;
+      capturedByWhite = [];
+      capturedByBlack = [];
+      clearTimeout(aiTimeoutId);
       document.getElementById('resignBtn').style.display = 'block';
 
       renderBoard();
+      renderCaptured();
       renderMoveList();
       updateStatus();
       sendStateUpdate();
@@ -431,6 +560,10 @@
           invocationId: invocationId,
           error: 'Missing required parameters: from and to (algebraic notation, e.g., "e2" and "e4")'
         });
+        // Unlock board on error so player isn't stuck
+        waitingForAI = false;
+        clearTimeout(aiTimeoutId);
+        updateStatus();
         return;
       }
 
@@ -441,7 +574,6 @@
       });
 
       if (!move) {
-        // Get legal moves for the source square for a helpful error
         const legalMoves = game.moves({ square: params.from, verbose: true });
         let hint = '';
         if (legalMoves.length > 0) {
@@ -452,7 +584,7 @@
           if (!piece) {
             hint = ' No piece on ' + params.from + '.';
           } else if (piece.color !== game.turn()) {
-            hint = ' That is not your piece (it is ' + game.turn() + "'s turn).";
+            hint = " That is not your piece (it is " + game.turn() + "'s turn).";
           } else {
             hint = ' That piece has no legal moves.';
           }
@@ -461,13 +593,20 @@
           invocationId: invocationId,
           error: 'Illegal move: ' + params.from + ' to ' + params.to + '.' + hint
         });
+        // Don't unlock — AI should retry with a valid move
         return;
       }
 
       lastMove = { from: move.from, to: move.to };
+      if (move.captured) {
+        capturedByBlack.push(move.captured);
+      }
       selectedSquare = null;
-      waitingForAI = false; // Unlock board after AI moves
+      waitingForAI = false;
+      clearTimeout(aiTimeoutId);
+      document.getElementById('retryBtn').style.display = 'none';
       renderBoard();
+      renderCaptured();
       renderMoveList();
       updateStatus();
       sendStateUpdate();
@@ -524,6 +663,7 @@
       }
 
       gameOver = true;
+      clearTimeout(aiTimeoutId);
       const statusEl = document.getElementById('status');
       statusEl.textContent = 'Resigned — Black wins';
       statusEl.className = 'status-bar ended';
@@ -531,7 +671,6 @@
 
       const history = game.history();
       const summary = buildGameSummary('loss', 'resignation', history);
-      postGameResult('loss');
 
       sendMsg('TOOL_RESULT', {
         invocationId: invocationId,
@@ -544,8 +683,6 @@
         }
       });
 
-      // PLUGIN_COMPLETE already sent by endGame, but resign_game was called
-      // by Claude, not the UI button — so send PLUGIN_COMPLETE here too
       sendMsg('PLUGIN_COMPLETE', { summary: summary, outcome: 'loss' });
     }
 
@@ -558,14 +695,13 @@
     }
 
     function getMaterialBalance() {
-      const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
       let white = 0, black = 0;
       const board = game.board();
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
           const piece = board[r][c];
           if (piece) {
-            const val = values[piece.type] || 0;
+            const val = PIECE_VALUES[piece.type] || 0;
             if (piece.color === 'w') white += val;
             else black += val;
           }
@@ -575,14 +711,10 @@
     }
 
     // ===== Message Listener =====
-    // SECURITY: This iframe runs with sandbox='allow-scripts' (no allow-same-origin).
-    // It has no access to parent DOM, cookies, or localStorage. It only processes
-    // TOOL_INVOKE messages and validates msg.type before acting. The iframe has no
-    // sensitive data to protect — it only receives tool parameters from the platform.
     window.addEventListener('message', function(event) {
       var msg = event.data;
       if (!msg || typeof msg !== 'object' || !msg.type) return;
-      if (msg.type !== 'TOOL_INVOKE') return; // Only accept TOOL_INVOKE
+      if (msg.type !== 'TOOL_INVOKE') return;
 
       if (msg.pluginId) pluginId = msg.pluginId;
       if (msg.conversationId) conversationId = msg.conversationId;
@@ -590,15 +722,14 @@
     });
 
     // ===== Initialization =====
-    const params = new URLSearchParams(window.location.search);
-    pluginId = params.get('pluginId') || 'chess';
-    conversationId = params.get('conversationId') || 'unknown';
+    const urlParams = new URLSearchParams(window.location.search);
+    pluginId = urlParams.get('pluginId') || 'chess';
+    conversationId = urlParams.get('conversationId') || 'unknown';
 
-    // Initialize with a blank game for display
     game = new Chess();
     renderBoard();
+    renderCaptured();
 
-    // Signal PLUGIN_READY
     sendMsg('PLUGIN_READY', {});
   </script>
 </body>

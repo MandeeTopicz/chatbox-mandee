@@ -5,6 +5,23 @@ import { MessageList } from '@/components/chat/message-list'
 import { ChatInput } from '@/components/chat/chat-input'
 import { PluginFrame, type PluginInvocation } from '@/components/chat/plugin-frame'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { GreetingMessage } from '@/components/chat/greeting-message'
+
+/**
+ * Try to extract a chess move (from/to squares) from the AI's natural language text.
+ * Looks for patterns like "e7 to e5", "move from e7 to e5", "I'll play Ne4" (algebraic),
+ * or explicit square references like "e7e5".
+ */
+function parseChessMove(text: string): { from: string; to: string } | null {
+  if (!text) return null
+  // Pattern 1: "from e7 to e5" or "e7 to e5"
+  const fromTo = text.match(/\b([a-h][1-8])\s*(?:to|-|→)\s*([a-h][1-8])\b/i)
+  if (fromTo) return { from: fromTo[1].toLowerCase(), to: fromTo[2].toLowerCase() }
+  // Pattern 2: "e7e5" (compact notation sometimes used)
+  const compact = text.match(/\b([a-h][1-8])([a-h][1-8])\b/)
+  if (compact) return { from: compact[1], to: compact[2] }
+  return null
+}
 
 export interface Message {
   id: string
@@ -18,10 +35,18 @@ export interface Message {
   }>
 }
 
+export interface ChatUserProfile {
+  displayName: string
+  role: string
+  isFirstLogin: boolean
+}
+
 export function ChatInterface({
   conversationId: initialConversationId,
+  userProfile,
 }: {
   conversationId: string | null
+  userProfile?: ChatUserProfile
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -43,6 +68,18 @@ export function ChatInterface({
     }
   }, [initialConversationId])
 
+  // Listen for starter-prompt events from sidebar tool shortcut buttons
+  useEffect(() => {
+    function handleStarterPrompt(e: Event) {
+      const prompt = (e as CustomEvent).detail
+      if (prompt && typeof prompt === 'string' && !isStreaming) {
+        sendMessage(prompt)
+      }
+    }
+    window.addEventListener('starter-prompt', handleStarterPrompt)
+    return () => window.removeEventListener('starter-prompt', handleStarterPrompt)
+  }, [isStreaming])
+
   async function loadMessages(convId: string) {
     const res = await fetch(`/api/conversations/${convId}`)
     if (res.ok) {
@@ -54,10 +91,11 @@ export function ChatInterface({
   async function processStream(
     res: Response,
     assistantId: string
-  ): Promise<{ toolInvocations: PluginInvocation[] }> {
+  ): Promise<{ toolInvocations: PluginInvocation[]; text: string }> {
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let accumulatedText = ''
     const toolInvocations: PluginInvocation[] = []
 
     while (true) {
@@ -83,6 +121,7 @@ export function ChatInterface({
               break
 
             case 'text_delta':
+              accumulatedText += event.text
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === assistantId
@@ -136,7 +175,7 @@ export function ChatInterface({
       }
     }
 
-    return { toolInvocations }
+    return { toolInvocations, text: accumulatedText }
   }
 
   /**
@@ -279,7 +318,8 @@ export function ChatInterface({
 
       // If it's the AI's turn (black) after a player move, auto-trigger Claude
       if (payload?.turn === 'b' && payload?.playerMove && !isStreaming) {
-        const moveMsg = `I played ${payload.playerMove}. Your turn.`
+        console.log('[chess-orchestrator] Player moved:', payload.playerMove, '— triggering AI response')
+        const moveMsg = `I played ${payload.playerMove}. Your turn. You MUST call make_move now.`
         setIsStreaming(true)
 
         const assistantId = crypto.randomUUID()
@@ -297,10 +337,28 @@ export function ChatInterface({
 
           if (!res.ok) throw new Error(await res.text())
 
-          const { toolInvocations } = await processStream(res, assistantId)
+          const { toolInvocations, text: aiText } = await processStream(res, assistantId)
 
           if (toolInvocations.length > 0) {
+            console.log('[chess-orchestrator] AI called tool:', toolInvocations[0].toolName, toolInvocations[0].params)
             activatePlugin(toolInvocations[0])
+          } else {
+            console.warn('[chess-orchestrator] AI responded with text only (no tool call):', aiText.slice(0, 100))
+            // AI narrated a move without calling the tool. Try to parse
+            // square notation from the text and inject a synthetic tool call.
+            const parsed = parseChessMove(aiText)
+            if (parsed && activePlugin) {
+              console.log('[chess-orchestrator] Parsed move from text:', parsed, '— injecting synthetic tool call')
+              const syntheticId = crypto.randomUUID()
+              activatePlugin({
+                ...activePlugin,
+                toolUseId: syntheticId,
+                toolName: 'make_move',
+                params: { from: parsed.from, to: parsed.to },
+              })
+            } else {
+              console.error('[chess-orchestrator] Could not parse any move from AI text. Game may be stuck.')
+            }
           }
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : 'Failed to get AI move'
@@ -337,14 +395,36 @@ export function ChatInterface({
   return (
     <div className="flex h-full flex-col">
       {messages.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="space-y-2 text-center">
-            <h2 className="text-2xl font-semibold">ChatBridge</h2>
-            <p className="text-muted-foreground">
-              Start a conversation with your AI tutor
-            </p>
+        userProfile?.role === 'student' ? (
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-3xl px-4 py-6">
+              <GreetingMessage
+                displayName={userProfile.displayName}
+                isFirstLogin={userProfile.isFirstLogin}
+                onStarterPrompt={(prompt) => {
+                  sendMessage(prompt)
+                  // Mark first login as done
+                  if (userProfile.isFirstLogin) {
+                    fetch('/api/users/first-login', { method: 'POST' }).catch(() => {})
+                    userProfile.isFirstLogin = false
+                  }
+                }}
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="space-y-3 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50">
+                <span className="text-2xl font-bold text-indigo-600">CB</span>
+              </div>
+              <h2 className="text-2xl font-semibold text-slate-800">ChatBridge</h2>
+              <p className="text-sm text-slate-500">
+                Start a conversation with your AI tutor
+              </p>
+            </div>
+          </div>
+        )
       ) : (
         <ErrorBoundary fallbackMessage="Failed to render messages">
           <MessageList messages={messages} />

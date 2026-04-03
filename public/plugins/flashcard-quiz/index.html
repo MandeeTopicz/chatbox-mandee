@@ -258,7 +258,7 @@
       submitBtn.disabled = true;
 
       var card = quizData.cards[currentIndex];
-      var correct = normalizeAnswer(studentAnswer) === normalizeAnswer(card.answer);
+      var correct = isAnswerCorrect(studentAnswer, card.answer);
 
       answers.push({
         correct: correct,
@@ -289,6 +289,34 @@
 
     function normalizeAnswer(str) {
       return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function isAnswerCorrect(studentRaw, correctRaw) {
+      var student = normalizeAnswer(studentRaw);
+      var correct = normalizeAnswer(correctRaw);
+
+      // Exact match after normalization
+      if (student === correct) return true;
+
+      // Student answer is a meaningful prefix of the correct answer
+      // e.g., "No" matches "No, only right triangles"
+      // Require at least 2 chars to avoid single-letter matches
+      if (student.length >= 2 && correct.startsWith(student)) return true;
+
+      // Correct answer starts with student's answer as a distinct word boundary
+      // e.g., "Abraham Lincoln" matches "Abraham Lincoln (16th president)"
+      var correctLower = correctRaw.toLowerCase().trim();
+      var studentLower = studentRaw.toLowerCase().trim();
+      if (correctLower.startsWith(studentLower)) return true;
+
+      // Check if all significant words in the student answer appear in the correct answer
+      var studentWords = studentLower.split(/\s+/).filter(function(w) { return w.length > 2; });
+      if (studentWords.length > 0) {
+        var allFound = studentWords.every(function(w) { return correctLower.includes(w); });
+        if (allFound && studentWords.length >= 1) return true;
+      }
+
+      return false;
     }
 
     function renderSummary() {

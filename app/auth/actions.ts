@@ -7,13 +7,30 @@ import { createClient } from '@/lib/supabase/server'
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: formData.get('email') as string,
     password: formData.get('password') as string,
   })
 
   if (error) {
     return { error: error.message }
+  }
+
+  // Role-aware redirect
+  if (data.user) {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
+
+    revalidatePath('/', 'layout')
+
+    if (profile?.role === 'admin') {
+      redirect('/admin')
+    } else if (profile?.role === 'teacher') {
+      redirect('/teacher')
+    }
   }
 
   revalidatePath('/', 'layout')
@@ -44,6 +61,13 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
+
+  if (role === 'admin') {
+    redirect('/admin')
+  } else if (role === 'teacher') {
+    redirect('/teacher')
+  }
+
   redirect('/chat')
 }
 

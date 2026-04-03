@@ -23,6 +23,8 @@ const TOOL_SCHEMAS: Record<string, string[]> = {
   // Quiz tools
   start_quiz: ['quizId', 'title', 'topic', 'totalCards', 'message'],
   submit_answer: ['correct', 'correctAnswer', 'cardIndex', 'remaining'],
+  // Weather
+  get_weather: ['city', 'country', 'temp', 'feels_like', 'humidity', 'wind_speed', 'description', 'condition', 'message'],
   // Test stub
   test_echo: ['success', 'toolName', 'message', 'params_received', 'timestamp'],
 }

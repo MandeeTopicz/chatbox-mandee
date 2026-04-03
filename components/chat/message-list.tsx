@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { Bot, User, Wrench, Info } from 'lucide-react'
+import { Bot, User, Info } from 'lucide-react'
 import type { Message } from './chat-interface'
 
 export function MessageList({ messages }: { messages: Message[] }) {
@@ -10,29 +10,23 @@ export function MessageList({ messages }: { messages: Message[] }) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const userScrolledUpRef = useRef(false)
 
-  // Detect if user has scrolled up from the bottom
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    // Consider "at bottom" if within 80px
     userScrolledUpRef.current = distanceFromBottom > 80
   }, [])
 
-  // Auto-scroll to bottom when messages change, unless user scrolled up
   useEffect(() => {
     if (!userScrolledUpRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages])
 
-  // Filter out messages that shouldn't be displayed
   const visibleMessages = messages.filter((msg) => {
     if (msg.role === 'tool') return false
-    // Hide auto-generated "I played X. Your turn." messages
     if (msg.role === 'user' && /^I played .+\. Your turn\.$/.test(msg.content)) return false
-    // Hide empty assistant messages (leftover from tool-only responses saved to DB)
-    if (msg.role === 'assistant' && !msg.content && !msg.toolCalls?.length) return false
+    if (msg.role === 'assistant' && !msg.content) return false
     return true
   })
 
@@ -66,15 +60,17 @@ function MessageBubble({ message }: { message: Message }) {
       <div
         className={cn(
           'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-          isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
+          isUser ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700'
         )}
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
       <div
         className={cn(
-          'max-w-[80%] space-y-2 rounded-lg px-4 py-3 text-sm leading-relaxed',
-          isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
+          'max-w-[80%] space-y-2 rounded-2xl p-4 text-sm leading-relaxed',
+          isUser
+            ? 'bg-indigo-600 text-white'
+            : 'border-l-2 border-indigo-300 bg-indigo-50 text-slate-700'
         )}
       >
         {message.content ? (
@@ -87,20 +83,7 @@ function MessageBubble({ message }: { message: Message }) {
           </div>
         ) : null}
 
-        {/* Tool call indicators */}
-        {message.toolCalls?.map((call) => (
-          <div
-            key={call.id}
-            className="flex items-center gap-2 rounded border bg-background/50 px-3 py-2 text-xs"
-          >
-            <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-medium">{call.name}</span>
-            <span className="text-muted-foreground">
-              {JSON.stringify(call.input).slice(0, 80)}
-              {JSON.stringify(call.input).length > 80 ? '...' : ''}
-            </span>
-          </div>
-        ))}
+        {/* Tool calls hidden from message thread */}
       </div>
     </div>
   )

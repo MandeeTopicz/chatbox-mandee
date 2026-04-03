@@ -19,8 +19,8 @@ export default async function NewQuizPage() {
     .eq('id', user.id)
     .single()
 
-  // Students cannot access this page
-  if (!profile || profile.role !== 'teacher') {
+  // Only teachers can access this page
+  if (!profile || (profile.role !== 'teacher' && profile.role !== 'admin')) {
     redirect('/chat')
   }
 

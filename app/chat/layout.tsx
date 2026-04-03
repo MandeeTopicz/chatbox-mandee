@@ -16,9 +16,20 @@ export default async function ChatLayout({
 
   const { data: profile } = await supabase
     .from('users')
-    .select('display_name, role')
+    .select('display_name, role, school_id, first_login')
     .eq('id', user.id)
     .single()
+
+  // Get school name if user has a school
+  let schoolName: string | null = null
+  if (profile?.school_id) {
+    const { data: school } = await supabase
+      .from('schools')
+      .select('name')
+      .eq('id', profile.school_id)
+      .single()
+    schoolName = school?.name ?? null
+  }
 
   return (
     <ChatLayoutShell
@@ -26,6 +37,8 @@ export default async function ChatLayout({
       userEmail={user.email!}
       displayName={profile?.display_name ?? user.email!.split('@')[0]}
       role={profile?.role ?? 'student'}
+      schoolName={schoolName}
+      isFirstLogin={profile?.first_login ?? false}
     >
       {children}
     </ChatLayoutShell>

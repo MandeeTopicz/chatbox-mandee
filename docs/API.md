@@ -182,6 +182,82 @@ Persist plugin state for a conversation.
 
 ---
 
+## Google Classroom
+
+### GET /api/auth/google
+
+Initiates the Google OAuth flow. Redirects the authenticated teacher to Google's consent screen with scopes `classroom.courses.readonly` and `classroom.coursework.students`.
+
+**Auth:** Required (redirects to /login if not authenticated)
+**Response:** `302` redirect to Google OAuth URL
+
+---
+
+### GET /api/auth/google/callback
+
+Handles the Google OAuth callback. Exchanges the authorization code for tokens, encrypts them with AES-256-GCM, and stores in the `google_tokens` table.
+
+**Query params:** `code` (authorization code), `state` (user ID for CSRF verification)
+**Response:** `302` redirect to `/teacher?google_connected=true` on success
+
+**Error redirects:**
+- `/teacher?google_error=denied` — user denied consent
+- `/teacher?google_error=state_mismatch` — CSRF state mismatch
+- `/teacher?google_error=token_exchange` — token exchange failed
+
+---
+
+### GET /api/classroom/courses
+
+Returns the authenticated teacher's active Google Classroom courses.
+
+**Auth:** Requires teacher role + connected Google account
+
+**Response:** `200`
+```json
+[{ "id": "123456", "name": "AP History", "section": "Period 3" }]
+```
+
+**Errors:** `401` with `{ "needsAuth": true }` (Google not connected), `403` not a teacher
+
+---
+
+### POST /api/classroom/post-quiz
+
+Posts a ChatBridge quiz to a Google Classroom course as an assignment.
+
+**Auth:** Requires teacher role + connected Google account
+
+**Request Body:**
+```json
+{ "quizId": "uuid", "courseId": "google-classroom-course-id" }
+```
+
+**Response:** `201`
+```json
+{ "success": true, "assignmentId": "google-assignment-id", "title": "Civil War Key Events" }
+```
+
+**Errors:** `401` with `{ "needsAuth": true }` (Google not connected), `404` quiz not found
+
+---
+
+### google_tokens Table Schema
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | uuid (PK, FK → users) | The teacher's user ID |
+| `access_token` | text | AES-256-GCM encrypted Google access token |
+| `refresh_token` | text | AES-256-GCM encrypted Google refresh token |
+| `expires_at` | timestamptz | When the access token expires |
+| `created_at` | timestamptz | Row creation time |
+
+**RLS:** Users can only read/write their own row. Tokens are never returned raw from any API endpoint.
+
+**Encryption:** AES-256-GCM with a 32-byte key from `ENCRYPTION_KEY`. Each value = base64(IV + ciphertext + authTag).
+
+---
+
 ## Plugin postMessage Protocol
 
 All messages between the platform and plugin iframes follow this shape:

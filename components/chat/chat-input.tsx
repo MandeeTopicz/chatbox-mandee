@@ -22,7 +22,6 @@ export function ChatInput({
     onSend(trimmed)
     setInput('')
 
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -37,7 +36,6 @@ export function ChatInput({
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setInput(e.target.value)
-    // Auto-resize textarea
     const el = e.target
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
@@ -58,19 +56,21 @@ export function ChatInput({
           rows={1}
           disabled={isStreaming}
           className={cn(
-            'flex-1 resize-none rounded-lg border border-input bg-background px-4 py-3 text-sm',
-            'ring-offset-background placeholder:text-muted-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            'disabled:cursor-not-allowed disabled:opacity-50'
+            'flex-1 resize-none rounded-2xl border border-indigo-200 bg-background px-4 py-3 text-sm leading-relaxed text-slate-700',
+            'ring-offset-background placeholder:text-slate-400',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            'transition-colors duration-150'
           )}
         />
         <button
           type="submit"
           disabled={!input.trim() || isStreaming}
           className={cn(
-            'flex h-10 w-10 items-center justify-center rounded-lg',
-            'bg-primary text-primary-foreground',
-            'hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed'
+            'flex h-10 w-10 items-center justify-center rounded-2xl',
+            'bg-indigo-600 text-white',
+            'hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
+            'transition-colors duration-150'
           )}
         >
           <SendHorizontal className="h-4 w-4" />

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logger'
+
+const ROUTE = '/api/quizzes'
 
 // GET /api/quizzes — list all quizzes (any authenticated user)
 export async function GET(request: Request) {
@@ -7,8 +10,16 @@ export async function GET(request: Request) {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
+    logger.warn('auth.unauthorized', { route: ROUTE })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // Get user profile to scope quizzes by school
+  const { data: profile } = await supabase
+    .from('users')
+    .select('role, school_id')
+    .eq('id', user.id)
+    .single()
 
   const { searchParams } = new URL(request.url)
   const topic = searchParams.get('topic')
@@ -17,6 +28,11 @@ export async function GET(request: Request) {
     .from('quizzes')
     .select('id, title, topic, created_at')
     .order('created_at', { ascending: false })
+
+  // Students only see quizzes from their school (RLS also enforces this)
+  if (profile?.role === 'student' && profile.school_id) {
+    query = query.eq('school_id', profile.school_id)
+  }
 
   if (topic) {
     query = query.ilike('topic', `%${topic}%`)
@@ -43,11 +59,12 @@ export async function POST(request: Request) {
   // Check teacher role server-side
   const { data: profile } = await supabase
     .from('users')
-    .select('role')
+    .select('role, school_id')
     .eq('id', user.id)
     .single()
 
   if (!profile || profile.role !== 'teacher') {
+    logger.warn('auth.forbidden', { route: ROUTE, userId: user.id, data: { role: profile?.role } })
     return NextResponse.json(
       { error: 'Forbidden: only teachers can create quizzes' },
       { status: 403 }
@@ -84,6 +101,7 @@ export async function POST(request: Request) {
       title,
       topic,
       cards,
+      school_id: profile.school_id,
     })
     .select('id, title, topic, created_at')
     .single()

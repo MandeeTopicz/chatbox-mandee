@@ -26,9 +26,23 @@ export async function updateSession(request: NextRequest) {
   )
 
   // Refresh the session — important for Server Components
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Wrap in try/catch to handle stale/corrupt cookies gracefully
+  let user = null
+  try {
+    const {
+      data: { user: u },
+    } = await supabase.auth.getUser()
+    user = u
+  } catch {
+    // Corrupt auth cookie (e.g., from a previous Supabase instance).
+    // Clear all sb-* cookies so the user gets a fresh start.
+    const cookieNames = request.cookies.getAll().map((c) => c.name)
+    for (const name of cookieNames) {
+      if (name.startsWith('sb-')) {
+        supabaseResponse.cookies.delete(name)
+      }
+    }
+  }
 
   // Protect all routes except auth pages and API auth callback
   const isAuthPage =
@@ -48,6 +62,24 @@ export async function updateSession(request: NextRequest) {
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
+
+  // Content Security Policy — restrict iframe sources to self (registered plugins
+  // are served from the same origin via /plugins/*). Blocks third-party origins
+  // from being loaded in iframes to prevent unauthorized content injection.
+  const appOrigin = request.nextUrl.origin
+  supabaseResponse.headers.set(
+    'Content-Security-Policy',
+    [
+      `default-src 'self'`,
+      `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com https://accounts.google.com`,
+      `style-src 'self' 'unsafe-inline'`,
+      `img-src 'self' data: blob: https://api.weather.gov`,
+      `font-src 'self'`,
+      `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} https://accounts.google.com https://oauth2.googleapis.com https://classroom.googleapis.com https://api.weather.gov https://geocoding-api.open-meteo.com`,
+      `frame-src 'self'`,
+      `frame-ancestors 'self'`,
+    ].join('; ')
+  )
 
   return supabaseResponse
 }

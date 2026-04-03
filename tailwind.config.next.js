@@ -42,11 +42,36 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // Student palette
+        'stu-primary': {
+          DEFAULT: '#4f46e5', // indigo-600
+          dark: '#4338ca',    // indigo-700
+        },
+        'stu-accent': {
+          amber: '#fbbf24',   // amber-400
+          teal: '#14b8a6',    // teal-500
+        },
+        'stu-bg': '#eef2ff',  // indigo-50
+        // Teacher palette
+        'tea-primary': {
+          DEFAULT: '#1e293b', // slate-800
+          dark: '#0f172a',    // slate-900
+        },
+        'tea-accent': '#2563eb', // blue-600
+        'tea-bg': '#f8fafc',     // slate-50
+        // Admin palette
+        'adm-primary': '#334155', // slate-700
+        'adm-accent': '#7c3aed',  // violet-600
+        'adm-bg': '#f1f5f9',      // slate-100
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        // Card radii by role context
+        'card-student': '1rem',   // rounded-2xl equivalent
+        'card-teacher': '0.75rem', // rounded-xl equivalent
+        'card-admin': '0.75rem',   // rounded-xl equivalent
       },
     },
   },
