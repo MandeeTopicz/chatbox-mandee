@@ -25,7 +25,7 @@ export function MessageList({ messages, isStreaming }: { messages: Message[]; is
 
   const visibleMessages = messages.filter((msg, idx) => {
     if (msg.role === 'tool') return false
-    if (msg.role === 'user' && /^I played .+\. Your turn\.$/.test(msg.content)) return false
+    if (msg.role === 'user' && /(\[SYSTEM:|^I played .+\. (Your turn\.|Call make_move|\[SYSTEM)|^It's your turn as black)/.test(msg.content)) return false
     if (msg.role === 'assistant' && !msg.content) {
       // Keep the last empty assistant message visible while streaming (shows loading dots)
       if (isStreaming && idx === messages.length - 1) return true

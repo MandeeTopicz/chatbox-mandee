@@ -342,65 +342,92 @@ export function ChatInterface({
       // If it's the AI's turn (black) after a player move, auto-trigger Claude
       if (payload?.turn === 'b' && payload?.playerMove && !isStreaming) {
         console.log('[chess-orchestrator] Player moved:', payload.playerMove, '— triggering AI response')
+        const fen = typeof actualState === 'string' ? actualState : ''
         const isRetry = payload.playerMove === 'retry'
         const moveMsg = isRetry
-          ? `It's your turn as black. You MUST call make_move now with {from, to} squares. Do NOT describe your move in words.`
-          : `I played ${payload.playerMove}. Your turn. You MUST call make_move now.`
-        setIsStreaming(true)
+          ? `[SYSTEM: You are BLACK. The FEN is: ${fen} — it is black's turn. Call make_move with {from, to} now. Do not call get_board_state. Do not respond with text.]`
+          : `I played ${payload.playerMove}. [SYSTEM: You are BLACK. FEN: ${fen} — it is your turn. Call make_move with {from, to} now.]`
 
-        const assistantId = crypto.randomUUID()
-        setMessages((prev) => [
-          ...prev,
-          { id: assistantId, role: 'assistant', content: '', created_at: new Date().toISOString() },
-        ])
-
-        try {
-          const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: moveMsg, conversationId }),
-          })
-
-          if (!res.ok) throw new Error(await res.text())
-
-          const { toolInvocations, text: aiText } = await processStream(res, assistantId)
-
-          if (toolInvocations.length > 0) {
-            console.log('[chess-orchestrator] AI called tool:', toolInvocations[0].toolName, toolInvocations[0].params)
-            activatePlugin(toolInvocations[0])
-          } else {
-            console.warn('[chess-orchestrator] AI responded with text only (no tool call):', aiText.slice(0, 100))
-            // AI narrated a move without calling the tool. Try to parse
-            // square notation from the text and inject a synthetic tool call.
-            const parsed = parseChessMove(aiText)
-            if (parsed && activePlugin) {
-              console.log('[chess-orchestrator] Parsed move from text:', parsed, '— injecting synthetic tool call')
-              const syntheticId = crypto.randomUUID()
-              syntheticToolIdsRef.current.add(syntheticId)
-              activatePlugin({
-                ...activePlugin,
-                toolUseId: syntheticId,
-                toolName: 'make_move',
-                params: { from: parsed.from, to: parsed.to },
-              })
-            } else {
-              console.error('[chess-orchestrator] Could not parse any move from AI text. Game may be stuck.')
-            }
-          }
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Failed to get AI move'
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantId ? { ...msg, content: `Error: ${errorMessage}` } : msg
-            )
-          )
-        } finally {
-          setIsStreaming(false)
-        }
+        await triggerAIMove(moveMsg)
       }
     },
     [conversationId, isStreaming]
   )
+
+  async function triggerAIMove(moveMsg: string, retries = 0): Promise<void> {
+    if (retries > 2) {
+      console.error('[chess-orchestrator] Failed to get make_move after retries')
+      return
+    }
+    setIsStreaming(true)
+
+    const assistantId = crypto.randomUUID()
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: 'assistant', content: '', created_at: new Date().toISOString() },
+    ])
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: moveMsg, conversationId }),
+      })
+
+      if (!res.ok) throw new Error(await res.text())
+
+      const { toolInvocations, text: aiText } = await processStream(res, assistantId)
+
+      const moveInv = toolInvocations.find((inv) => inv.toolName === 'make_move')
+      if (moveInv) {
+        console.log('[chess-orchestrator] AI called make_move:', moveInv.params)
+        activatePlugin(moveInv)
+        return
+      }
+
+      // Claude called get_board_state or other tool but not make_move — retry
+      if (toolInvocations.length > 0) {
+        console.warn('[chess-orchestrator] AI called', toolInvocations[0].toolName, 'instead of make_move — retrying')
+        setIsStreaming(false)
+        await triggerAIMove(
+          `[SYSTEM: You MUST call make_move now with {from, to}. Do NOT call get_board_state. It is your turn as BLACK.]`,
+          retries + 1
+        )
+        return
+      }
+
+      // Text-only response — try to parse a move
+      const parsed = parseChessMove(aiText)
+      if (parsed && activePlugin) {
+        console.log('[chess-orchestrator] Parsed move from text:', parsed)
+        const syntheticId = crypto.randomUUID()
+        syntheticToolIdsRef.current.add(syntheticId)
+        activatePlugin({
+          ...activePlugin,
+          toolUseId: syntheticId,
+          toolName: 'make_move',
+          params: { from: parsed.from, to: parsed.to },
+        })
+      } else {
+        // Auto-retry instead of getting stuck
+        console.warn('[chess-orchestrator] No tool call or parseable move — retrying')
+        setIsStreaming(false)
+        await triggerAIMove(
+          `[SYSTEM: You MUST call make_move now with {from, to}. It is BLACK's turn. Do not respond with text.]`,
+          retries + 1
+        )
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get AI move'
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId ? { ...msg, content: `Error: ${errorMessage}` } : msg
+        )
+      )
+    } finally {
+      setIsStreaming(false)
+    }
+  }
 
   const handlePluginComplete = useCallback(
     (_pluginId: string, _summary: string, payload?: Record<string, unknown>) => {

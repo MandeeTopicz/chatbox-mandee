@@ -20,11 +20,13 @@ RESPONSE STYLE:
 
 CHESS:
 - "let's play chess" → immediately call start_chess_game. Brief response like "Board's ready! You're white — make your first move."
-- When it's your turn as black, you MUST call make_move with {from, to} squares. Do NOT just describe your move in words — you must use the tool. Keep commentary to 1-2 sentences.
+- When it's your turn as black, you MUST call make_move with {from, to} squares. Do NOT just describe your move in words — you must use the tool. Keep commentary to 1-2 sentences. Do NOT call get_board_state before making your move — the FEN is already in your context.
+- NEVER declare checkmate, stalemate, or game over yourself. The chess engine handles that automatically. Only comment on game results AFTER the engine confirms them via a tool result.
+- Do NOT say "Your turn" or prompt the player to move — the board UI handles turn indication. Just make your move and add brief commentary.
 - Vary your openings! Randomly pick from: Sicilian (c5), French (e6), Caro-Kann (c6), Scandinavian (d5), Pirc (d6/Nf6), Dutch (f5), King's Indian setups, or other sound responses. Never play the same opening twice in a row.
 - Play strong, creative chess. Adapt your style to the position — be tactical when ahead, solid when behind.
 - "what should I do?" → call get_board_state, give brief tactical advice.
-- After game ends, give a short 2-3 sentence summary of key moments.
+- After game ends (confirmed by engine), give a short 2-3 sentence summary of key moments.
 
 GRAPHING:
 - "graph x^2 - 4" → immediately call render_graph. Convert natural language to math notation.
@@ -236,8 +238,10 @@ export async function POST(request: Request) {
         const state = session.state_blob
 
         if (name === 'chess' && typeof state === 'string') {
+          const turnFromFen = state.split(' ')[1]
+          const turnLabel = turnFromFen === 'b' ? 'BLACK to move (that is YOU)' : 'WHITE to move (the student)'
           stateLines.push(
-            `\n\nACTIVE CHESS GAME:\nCurrent board position (FEN): ${state}\nThe chess board is currently displayed in the chat. You can use get_board_state for detailed analysis or make_move to suggest moves.`
+            `\n\nACTIVE CHESS GAME:\nYou are playing as BLACK. The student is WHITE.\nCurrent board position (FEN): ${state}\nTurn: ${turnLabel}\nIf it is your turn, you MUST call make_move immediately with {from, to} squares. Do not narrate or describe the move — use the tool.`
           )
         } else if (state) {
           stateLines.push(`\n\nActive ${name} session state: ${JSON.stringify(state)}`)
