@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Crown, LineChart, Layers, CloudSun, Music, LinkIcon, Check } from 'lucide-react'
+import { Crown, LineChart, Layers, CloudSun, Calendar, LinkIcon, Check } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 interface AppConfig {
@@ -54,14 +54,14 @@ const APPS: AppConfig[] = [
     iconColor: 'text-sky-400',
   },
   {
-    id: 'spotify',
-    label: 'Spotify',
-    icon: Music,
-    description: 'Create playlists',
-    prompt: 'Create a study playlist for me!',
-    iconBg: 'bg-emerald-500/20',
-    iconColor: 'text-emerald-400',
-    oauthProvider: 'spotify',
+    id: 'google-calendar',
+    label: 'Calendar',
+    icon: Calendar,
+    description: 'Study schedule',
+    prompt: 'Show me my upcoming events and help me plan my study schedule!',
+    iconBg: 'bg-blue-500/20',
+    iconColor: 'text-blue-400',
+    oauthProvider: 'google-calendar',
   },
 ]
 

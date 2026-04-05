@@ -32,18 +32,18 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     extraAuthParams: { access_type: 'offline', prompt: 'consent' },
     successRedirect: '/teacher',
   },
-  spotify: {
-    name: 'Spotify',
-    clientIdEnv: 'SPOTIFY_CLIENT_ID',
-    clientSecretEnv: 'SPOTIFY_CLIENT_SECRET',
-    redirectUriEnv: 'SPOTIFY_REDIRECT_URI',
-    authUrl: 'https://accounts.spotify.com/authorize',
-    tokenUrl: 'https://accounts.spotify.com/api/token',
+  'google-calendar': {
+    name: 'Google Calendar',
+    clientIdEnv: 'GOOGLE_CLIENT_ID',
+    clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
+    redirectUriEnv: 'GOOGLE_CALENDAR_REDIRECT_URI',
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
     scopes: [
-      'playlist-modify-public',
-      'playlist-modify-private',
-      'user-read-private',
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/calendar.readonly',
     ],
+    extraAuthParams: { access_type: 'offline', prompt: 'consent' },
     successRedirect: '/chat',
   },
 }

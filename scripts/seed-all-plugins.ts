@@ -132,6 +132,39 @@ const plugins = [
     ],
     allowed: true,
   },
+  {
+    name: 'google-calendar',
+    url: `${baseUrl}/plugins/google-calendar/index.html`,
+    tool_schemas: [
+      {
+        name: 'list_events',
+        description: 'List upcoming events from the student\'s Google Calendar. Shows the next few events with dates and times. Use when the student asks about their schedule, upcoming events, or wants to plan study time.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            maxResults: { type: 'number', description: 'Maximum number of events to return (default: 10)' },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'create_event',
+        description: 'Create a new event on the student\'s Google Calendar. Use when the student wants to schedule a study session, set a reminder for an assignment, or plan their study time.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string', description: 'Event title (e.g., "Math Study Session")' },
+            description: { type: 'string', description: 'Event description with study details' },
+            startTime: { type: 'string', description: 'Start time in ISO 8601 format (e.g., "2026-04-05T15:00:00-04:00")' },
+            endTime: { type: 'string', description: 'End time in ISO 8601 format (e.g., "2026-04-05T16:00:00-04:00")' },
+            timeZone: { type: 'string', description: 'IANA time zone (default: America/New_York)' },
+          },
+          required: ['summary', 'startTime'],
+        },
+      },
+    ],
+    allowed: true,
+  },
 ]
 
 async function seed() {

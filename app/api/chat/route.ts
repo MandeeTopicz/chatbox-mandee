@@ -40,11 +40,12 @@ WEATHER:
 - After result, connect it to learning if relevant (geography, climate, science).
 - Keep weather responses short — 1-2 sentences about the conditions.
 
-SPOTIFY:
-- "make me a playlist about [topic]" → call create_playlist with a name and search query related to the topic.
-- "find songs about [topic]" → call search_tracks with the topic as query.
-- Connect music to learning when possible (e.g., "Here are some songs about space exploration!").
-- Keep responses brief — 1-2 sentences about the results.`
+GOOGLE CALENDAR:
+- "show my events" or "what's on my schedule?" → call list_events.
+- "add a study session for [topic] on [date/time]" → call create_event with summary, description, startTime, and endTime.
+- Help students plan study schedules by suggesting events based on their subjects.
+- When creating events, always include a helpful description related to what they're studying.
+- Keep responses brief — 1-2 sentences about the events.`
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -330,8 +331,8 @@ export async function POST(request: Request) {
                 enrichedParams = await enrichQuizParams(supabase, call.input)
               } else if (call.name === 'get_weather') {
                 enrichedParams = await enrichWeatherParams(call.input)
-              } else if (call.name === 'search_tracks' || call.name === 'create_playlist') {
-                enrichedParams = await enrichSpotifyParams(user.id, call.name, call.input)
+              } else if (call.name === 'list_events' || call.name === 'create_event') {
+                enrichedParams = await enrichCalendarParams(user.id, call.name, call.input)
               }
 
               send({
@@ -615,85 +616,75 @@ async function enrichWeatherParams(
 }
 
 /**
- * Enrich Spotify tool params with data fetched server-side.
+ * Enrich Google Calendar tool params with data fetched server-side.
  */
-async function enrichSpotifyParams(
+async function enrichCalendarParams(
   userId: string,
   toolName: string,
   params: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   try {
     const { getValidToken } = await import('@/lib/oauth-tokens')
-    const token = await getValidToken(userId, 'spotify')
+    const token = await getValidToken(userId, 'google-calendar')
     if (!token) {
-      return { ...params, _spotifyError: 'Spotify not connected. Connect at /api/auth/oauth/spotify' }
+      return { ...params, _calendarError: 'Google Calendar not connected. Connect at /api/auth/oauth/google-calendar' }
     }
 
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-    if (toolName === 'search_tracks') {
-      const query = params.query as string
-      if (!query) return { ...params, _spotifyError: 'No search query provided' }
-
-      const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=5`, { headers })
-      if (!res.ok) return { ...params, _spotifyError: 'Spotify search failed' }
+    if (toolName === 'list_events') {
+      const now = new Date().toISOString()
+      const maxResults = (params.maxResults as number) || 10
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(now)}&maxResults=${maxResults}&singleEvents=true&orderBy=startTime`,
+        { headers }
+      )
+      if (!res.ok) return { ...params, _calendarError: 'Failed to fetch events' }
 
       const data = await res.json()
-      const tracks = (data.tracks?.items || []).map((t: { id: string; name: string; artists: { name: string }[]; album: { name: string; images: { url: string }[] }; external_urls: { spotify: string }; duration_ms: number }) => ({
-        id: t.id, name: t.name,
-        artist: t.artists.map((a) => a.name).join(', '),
-        album: t.album.name,
-        albumArt: t.album.images?.[0]?.url || null,
-        url: t.external_urls.spotify,
-        durationMs: t.duration_ms,
+      const events = (data.items || []).map((ev: { id: string; summary?: string; description?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string }) => ({
+        id: ev.id,
+        summary: ev.summary || 'Untitled',
+        description: ev.description || '',
+        start: ev.start?.dateTime || ev.start?.date || null,
+        end: ev.end?.dateTime || ev.end?.date || null,
+        htmlLink: ev.htmlLink || null,
       }))
-      return { ...params, _spotifyData: { tracks } }
+      return { ...params, _calendarData: { events } }
     }
 
-    if (toolName === 'create_playlist') {
-      const name = params.name as string || 'ChatBridge Playlist'
-      const description = params.description as string || 'Created by ChatBridge AI tutor'
-      const query = params.query as string
+    if (toolName === 'create_event') {
+      const summary = params.summary as string || 'Study Session'
+      const description = params.description as string || 'Created by ChatBridge'
+      const startTime = params.startTime as string
+      const endTime = params.endTime as string
 
-      // Search for tracks first
-      let trackIds: string[] = []
-      if (query) {
-        const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`, { headers })
-        if (searchRes.ok) {
-          const searchData = await searchRes.json()
-          trackIds = (searchData.tracks?.items || []).map((t: { id: string }) => t.id)
-        }
+      if (!startTime) return { ...params, _calendarError: 'Start time is required' }
+
+      const eventBody = {
+        summary,
+        description,
+        start: { dateTime: startTime, timeZone: (params.timeZone as string) || 'America/New_York' },
+        end: { dateTime: endTime || new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(), timeZone: (params.timeZone as string) || 'America/New_York' },
       }
 
-      // Get Spotify user ID
-      const meRes = await fetch('https://api.spotify.com/v1/me', { headers })
-      if (!meRes.ok) return { ...params, _spotifyError: 'Failed to get Spotify profile' }
-      const me = await meRes.json()
-
-      // Create playlist
-      const plRes = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
         method: 'POST', headers,
-        body: JSON.stringify({ name, description, public: false }),
+        body: JSON.stringify(eventBody),
       })
-      if (!plRes.ok) return { ...params, _spotifyError: 'Failed to create playlist' }
-      const playlist = await plRes.json()
+      if (!res.ok) return { ...params, _calendarError: 'Failed to create event' }
 
-      // Add tracks
-      if (trackIds.length > 0) {
-        await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
-          method: 'POST', headers,
-          body: JSON.stringify({ uris: trackIds.map((id) => `spotify:track:${id}`) }),
-        })
-      }
-
+      const created = await res.json()
       return {
         ...params,
-        _spotifyData: {
-          playlist: {
-            id: playlist.id,
-            name: playlist.name,
-            url: playlist.external_urls.spotify,
-            trackCount: trackIds.length,
+        _calendarData: {
+          event: {
+            id: created.id,
+            summary: created.summary,
+            description: created.description,
+            start: created.start?.dateTime || created.start?.date,
+            end: created.end?.dateTime || created.end?.date,
+            htmlLink: created.htmlLink,
           },
         },
       }
@@ -701,6 +692,6 @@ async function enrichSpotifyParams(
 
     return params
   } catch {
-    return { ...params, _spotifyError: 'Spotify API error' }
+    return { ...params, _calendarError: 'Google Calendar API error' }
   }
 }
