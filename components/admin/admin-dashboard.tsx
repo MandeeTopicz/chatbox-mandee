@@ -657,13 +657,9 @@ function PluginsTab() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   async function loadPlugins() {
-    const res = await fetch('/api/admin/stats')
-    if (!res.ok) return
-    // Stats endpoint doesn't include plugins — fetch directly via service-level endpoint
-    // Use a dedicated fetch to get all plugins (pending + active) for admin
-    const pluginRes = await fetch('/api/admin/plugins')
-    if (pluginRes.ok) {
-      setPlugins(await pluginRes.json())
+    const res = await fetch('/api/admin/plugins')
+    if (res.ok) {
+      setPlugins(await res.json())
     }
   }
 
@@ -678,7 +674,6 @@ function PluginsTab() {
 
   async function handleApprove(id: string) {
     setActionLoading(id)
-    // Optimistic update
     setPlugins((prev) => prev.map((p) => (p.id === id ? { ...p, allowed: true } : p)))
 
     const res = await fetch(`/api/admin/plugins/${id}`, {
@@ -690,7 +685,6 @@ function PluginsTab() {
     if (res.ok) {
       showToast('Plugin approved', 'success')
     } else {
-      // Revert optimistic update
       setPlugins((prev) => prev.map((p) => (p.id === id ? { ...p, allowed: false } : p)))
       showToast('Failed to approve plugin', 'error')
     }
@@ -699,7 +693,6 @@ function PluginsTab() {
 
   async function handleReject(id: string, action: 'reject' | 'disable') {
     setActionLoading(id)
-    // Optimistic update — remove from list
     const previous = plugins
     setPlugins((prev) => prev.filter((p) => p.id !== id))
 
@@ -712,7 +705,6 @@ function PluginsTab() {
     if (res.ok || res.status === 204) {
       showToast(action === 'reject' ? 'Plugin rejected' : 'Plugin disabled', 'success')
     } else {
-      // Revert optimistic update
       setPlugins(previous)
       showToast(`Failed to ${action} plugin`, 'error')
     }
@@ -732,7 +724,6 @@ function PluginsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
       {toast && (
         <div
           className={`fixed right-6 top-6 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-lg transition-all ${

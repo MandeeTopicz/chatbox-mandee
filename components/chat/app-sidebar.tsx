@@ -135,7 +135,6 @@ export function AppSidebar() {
     }
 
     if (pathname === '/chat') {
-      // Already on /chat — reset and send prompt
       window.dispatchEvent(new Event('reset-chat'))
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('starter-prompt', { detail: app.prompt }))

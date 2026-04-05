@@ -20,7 +20,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // Use service role to bypass RLS and see all plugins including allowed=false
   const service = await createServiceClient()
 
   const { data, error } = await service

@@ -33,7 +33,6 @@ export async function PATCH(
   const service = await createServiceClient()
 
   if (body.allowed) {
-    // Approve: set allowed=true
     const { data, error } = await service
       .from('plugins')
       .update({ allowed: true })
@@ -49,7 +48,6 @@ export async function PATCH(
     logger.info('admin.plugin_approved', { route: '/api/admin/plugins/[id]', userId: user.id, data: { pluginId: id } })
     return NextResponse.json(data)
   } else {
-    // Reject / disable: delete the row entirely
     const { error } = await service
       .from('plugins')
       .delete()
