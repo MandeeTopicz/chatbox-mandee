@@ -15,6 +15,12 @@ import {
   X,
   Loader2,
   ChevronDown,
+  Puzzle,
+  CheckCircle,
+  XCircle,
+  Ban,
+  Clock,
+  Package,
 } from 'lucide-react'
 
 interface Stats {
@@ -50,9 +56,19 @@ interface SchoolItem {
   name: string
 }
 
+interface PluginRow {
+  id: string
+  name: string
+  url: string
+  allowed: boolean
+  created_at: string
+}
+
+type AdminTab = 'users' | 'plugins'
 type ModalType = 'add-user' | 'add-school' | null
 
 export function AdminDashboard() {
+  const [activeTab, setActiveTab] = useState<AdminTab>('users')
   const [stats, setStats] = useState<Stats | null>(null)
   const [schools, setSchools] = useState<SchoolItem[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -158,192 +174,219 @@ export function AdminDashboard() {
           <StatCard icon={BookOpen} label="Quizzes" value={stats?.total_quizzes ?? 0} borderColor="border-l-amber-500" iconBg="bg-amber-50" iconColor="text-amber-600" />
         </div>
 
-        {/* Schools panel */}
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-            <h2 className="flex items-center gap-2 font-semibold text-slate-800">
-              <School className="h-4 w-4 text-violet-600" />
-              Schools
-            </h2>
+        {/* Tab bar */}
+        <div className="flex gap-4 border-b border-slate-200">
+          {([
+            { key: 'users' as AdminTab, label: 'Teachers & Students', icon: Users },
+            { key: 'plugins' as AdminTab, label: 'Plugins', icon: Puzzle },
+          ]).map((tab) => (
             <button
-              onClick={() => setModal('add-school')}
-              className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 border-b-2 pb-3 pt-1 text-sm font-medium transition-colors duration-150 ${
+                activeTab === tab.key
+                  ? 'border-blue-600 text-slate-800'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
             >
-              <Plus className="h-3.5 w-3.5" /> Add
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
             </button>
-          </div>
-          {schools.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <School className="h-10 w-10 text-slate-300" />
-              <p className="text-sm text-slate-500">No schools yet</p>
-              <button
-                onClick={() => setModal('add-school')}
-                className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-slate-700"
-              >
-                <Plus className="h-4 w-4" /> Add your first school
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-3 px-5 py-4">
-              {schools.map((s) => {
-                const teacherCount = teachers.filter((t) => t.school_id === s.id).length
-                const studentCount = students.filter((st) => st.school_id === s.id).length
-                return (
-                  <div key={s.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5">
-                    <School className="h-4 w-4 text-violet-500" />
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">{s.name}</p>
-                      <p className="text-[11px] text-slate-500">{teacherCount} teachers &middot; {studentCount} students</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          ))}
         </div>
 
-        {/* Two-panel layout */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Teacher list */}
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-              <h2 className="flex items-center gap-2 font-semibold text-slate-800">
-                <GraduationCap className="h-4 w-4 text-blue-600" />
-                Teachers
-              </h2>
-              <button
-                onClick={() => setModal('add-user')}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add
-              </button>
-            </div>
-            <div>
-              {teachers.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-16 text-center">
-                  <UserPlus className="h-10 w-10 text-slate-300" />
-                  <p className="text-sm text-slate-500">No teachers yet</p>
+        {activeTab === 'users' && (
+          <>
+            {/* Schools panel */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+                <h2 className="flex items-center gap-2 font-semibold text-slate-800">
+                  <School className="h-4 w-4 text-violet-600" />
+                  Schools
+                </h2>
+                <button
+                  onClick={() => setModal('add-school')}
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add
+                </button>
+              </div>
+              {schools.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <School className="h-10 w-10 text-slate-300" />
+                  <p className="text-sm text-slate-500">No schools yet</p>
                   <button
-                    onClick={() => setModal('add-user')}
+                    onClick={() => setModal('add-school')}
                     className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-slate-700"
                   >
-                    <Plus className="h-4 w-4" /> Add your first teacher
+                    <Plus className="h-4 w-4" /> Add your first school
                   </button>
                 </div>
               ) : (
-                teachers.map((t, i) => (
-                  <div
-                    key={t.id}
-                    className={`group flex items-center justify-between px-5 py-3.5 transition-colors duration-150 hover:bg-slate-50 ${
-                      i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
-                    } ${i < teachers.length - 1 ? 'border-b border-slate-100' : ''}`}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {t.display_name || t.email.split('@')[0]}
-                        </p>
-                        <RoleBadge role="teacher" />
+                <div className="flex flex-wrap gap-3 px-5 py-4">
+                  {schools.map((s) => {
+                    const teacherCount = teachers.filter((t) => t.school_id === s.id).length
+                    const studentCount = students.filter((st) => st.school_id === s.id).length
+                    return (
+                      <div key={s.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5">
+                        <School className="h-4 w-4 text-violet-500" />
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{s.name}</p>
+                          <p className="text-[11px] text-slate-500">{teacherCount} teachers &middot; {studentCount} students</p>
+                        </div>
                       </div>
-                      <p className="truncate text-xs text-slate-500">{t.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        {t.quiz_count} quizzes
-                      </span>
-                      <RoleDropdown
-                        currentRole="teacher"
-                        userId={t.id}
-                        loading={actionLoading === t.id}
-                        onChangeRole={changeRole}
-                      />
-                      <button
-                        onClick={() => deleteUser(t.id, t.display_name || t.email)}
-                        disabled={actionLoading === t.id}
-                        className="hidden rounded-lg p-1.5 text-slate-400 transition-colors duration-150 hover:bg-red-50 hover:text-red-500 group-hover:block disabled:opacity-50"
-                        title="Remove user"
-                      >
-                        {actionLoading === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                ))
+                    )
+                  })}
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Student list */}
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-              <h2 className="flex items-center gap-2 font-semibold text-slate-800">
-                <Users className="h-4 w-4 text-green-600" />
-                Students
-              </h2>
-              <button
-                onClick={() => setModal('add-user')}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add
-              </button>
-            </div>
-            <div>
-              {students.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-16 text-center">
-                  <UserPlus className="h-10 w-10 text-slate-300" />
-                  <p className="text-sm text-slate-500">No students enrolled yet</p>
+            {/* Two-panel layout */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Teacher list */}
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+                  <h2 className="flex items-center gap-2 font-semibold text-slate-800">
+                    <GraduationCap className="h-4 w-4 text-blue-600" />
+                    Teachers
+                  </h2>
                   <button
                     onClick={() => setModal('add-user')}
-                    className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-slate-700"
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    <Plus className="h-4 w-4" /> Add a student
+                    <Plus className="h-3.5 w-3.5" /> Add
                   </button>
                 </div>
-              ) : (
-                students.map((s, i) => (
-                  <div
-                    key={s.id}
-                    className={`group flex items-center justify-between px-5 py-3.5 transition-colors duration-150 hover:bg-slate-50 ${
-                      i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
-                    } ${i < students.length - 1 ? 'border-b border-slate-100' : ''}`}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {s.display_name || s.email.split('@')[0]}
-                        </p>
-                        <RoleBadge role="student" />
-                      </div>
-                      <p className="truncate text-xs text-slate-500">{s.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        {s.quizzes_taken} quizzes
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-slate-500">
-                        <Trophy className="h-3 w-3 text-amber-500" />
-                        {s.chess_wins}W {s.chess_losses}L {s.chess_draws}D
-                      </span>
-                      <RoleDropdown
-                        currentRole="student"
-                        userId={s.id}
-                        loading={actionLoading === s.id}
-                        onChangeRole={changeRole}
-                      />
+                <div>
+                  {teachers.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-16 text-center">
+                      <UserPlus className="h-10 w-10 text-slate-300" />
+                      <p className="text-sm text-slate-500">No teachers yet</p>
                       <button
-                        onClick={() => deleteUser(s.id, s.display_name || s.email)}
-                        disabled={actionLoading === s.id}
-                        className="hidden rounded-lg p-1.5 text-slate-400 transition-colors duration-150 hover:bg-red-50 hover:text-red-500 group-hover:block disabled:opacity-50"
-                        title="Remove user"
+                        onClick={() => setModal('add-user')}
+                        className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-slate-700"
                       >
-                        {actionLoading === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        <Plus className="h-4 w-4" /> Add your first teacher
                       </button>
                     </div>
-                  </div>
-                ))
-              )}
+                  ) : (
+                    teachers.map((t, i) => (
+                      <div
+                        key={t.id}
+                        className={`group flex items-center justify-between px-5 py-3.5 transition-colors duration-150 hover:bg-slate-50 ${
+                          i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                        } ${i < teachers.length - 1 ? 'border-b border-slate-100' : ''}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium text-slate-800">
+                              {t.display_name || t.email.split('@')[0]}
+                            </p>
+                            <RoleBadge role="teacher" />
+                          </div>
+                          <p className="truncate text-xs text-slate-500">{t.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                            {t.quiz_count} quizzes
+                          </span>
+                          <RoleDropdown
+                            currentRole="teacher"
+                            userId={t.id}
+                            loading={actionLoading === t.id}
+                            onChangeRole={changeRole}
+                          />
+                          <button
+                            onClick={() => deleteUser(t.id, t.display_name || t.email)}
+                            disabled={actionLoading === t.id}
+                            className="hidden rounded-lg p-1.5 text-slate-400 transition-colors duration-150 hover:bg-red-50 hover:text-red-500 group-hover:block disabled:opacity-50"
+                            title="Remove user"
+                          >
+                            {actionLoading === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Student list */}
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+                  <h2 className="flex items-center gap-2 font-semibold text-slate-800">
+                    <Users className="h-4 w-4 text-green-600" />
+                    Students
+                  </h2>
+                  <button
+                    onClick={() => setModal('add-user')}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                </div>
+                <div>
+                  {students.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-16 text-center">
+                      <UserPlus className="h-10 w-10 text-slate-300" />
+                      <p className="text-sm text-slate-500">No students enrolled yet</p>
+                      <button
+                        onClick={() => setModal('add-user')}
+                        className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-slate-700"
+                      >
+                        <Plus className="h-4 w-4" /> Add a student
+                      </button>
+                    </div>
+                  ) : (
+                    students.map((s, i) => (
+                      <div
+                        key={s.id}
+                        className={`group flex items-center justify-between px-5 py-3.5 transition-colors duration-150 hover:bg-slate-50 ${
+                          i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                        } ${i < students.length - 1 ? 'border-b border-slate-100' : ''}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium text-slate-800">
+                              {s.display_name || s.email.split('@')[0]}
+                            </p>
+                            <RoleBadge role="student" />
+                          </div>
+                          <p className="truncate text-xs text-slate-500">{s.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                            {s.quizzes_taken} quizzes
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-slate-500">
+                            <Trophy className="h-3 w-3 text-amber-500" />
+                            {s.chess_wins}W {s.chess_losses}L {s.chess_draws}D
+                          </span>
+                          <RoleDropdown
+                            currentRole="student"
+                            userId={s.id}
+                            loading={actionLoading === s.id}
+                            onChangeRole={changeRole}
+                          />
+                          <button
+                            onClick={() => deleteUser(s.id, s.display_name || s.email)}
+                            disabled={actionLoading === s.id}
+                            className="hidden rounded-lg p-1.5 text-slate-400 transition-colors duration-150 hover:bg-red-50 hover:text-red-500 group-hover:block disabled:opacity-50"
+                            title="Remove user"
+                          >
+                            {actionLoading === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
+
+        {activeTab === 'plugins' && <PluginsTab />}
       </div>
 
       {/* Modals */}
@@ -604,6 +647,200 @@ function AddSchoolModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
         </button>
       </form>
     </ModalShell>
+  )
+}
+
+function PluginsTab() {
+  const [plugins, setPlugins] = useState<PluginRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  async function loadPlugins() {
+    const res = await fetch('/api/admin/stats')
+    if (!res.ok) return
+    // Stats endpoint doesn't include plugins — fetch directly via service-level endpoint
+    // Use a dedicated fetch to get all plugins (pending + active) for admin
+    const pluginRes = await fetch('/api/admin/plugins')
+    if (pluginRes.ok) {
+      setPlugins(await pluginRes.json())
+    }
+  }
+
+  useEffect(() => {
+    loadPlugins().then(() => setLoading(false))
+  }, [])
+
+  function showToast(message: string, type: 'success' | 'error') {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  async function handleApprove(id: string) {
+    setActionLoading(id)
+    // Optimistic update
+    setPlugins((prev) => prev.map((p) => (p.id === id ? { ...p, allowed: true } : p)))
+
+    const res = await fetch(`/api/admin/plugins/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowed: true }),
+    })
+
+    if (res.ok) {
+      showToast('Plugin approved', 'success')
+    } else {
+      // Revert optimistic update
+      setPlugins((prev) => prev.map((p) => (p.id === id ? { ...p, allowed: false } : p)))
+      showToast('Failed to approve plugin', 'error')
+    }
+    setActionLoading(null)
+  }
+
+  async function handleReject(id: string, action: 'reject' | 'disable') {
+    setActionLoading(id)
+    // Optimistic update — remove from list
+    const previous = plugins
+    setPlugins((prev) => prev.filter((p) => p.id !== id))
+
+    const res = await fetch(`/api/admin/plugins/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowed: false }),
+    })
+
+    if (res.ok || res.status === 204) {
+      showToast(action === 'reject' ? 'Plugin rejected' : 'Plugin disabled', 'success')
+    } else {
+      // Revert optimistic update
+      setPlugins(previous)
+      showToast(`Failed to ${action} plugin`, 'error')
+    }
+    setActionLoading(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
+  const pending = plugins.filter((p) => !p.allowed)
+  const active = plugins.filter((p) => p.allowed)
+
+  return (
+    <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed right-6 top-6 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-lg transition-all ${
+            toast.type === 'success'
+              ? 'bg-green-600 text-white'
+              : 'bg-red-600 text-white'
+          }`}
+        >
+          {toast.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+          {toast.message}
+        </div>
+      )}
+
+      {/* Pending plugins */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-3.5">
+          <Clock className="h-4 w-4 text-amber-500" />
+          <h2 className="font-semibold text-slate-800">Pending Approval</h2>
+          {pending.length > 0 && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              {pending.length}
+            </span>
+          )}
+        </div>
+        {pending.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <CheckCircle className="h-10 w-10 text-slate-300" />
+            <p className="text-sm text-slate-500">No plugins awaiting approval</p>
+          </div>
+        ) : (
+          pending.map((p, i) => (
+            <div
+              key={p.id}
+              className={`flex items-center justify-between px-5 py-3.5 ${
+                i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+              } ${i < pending.length - 1 ? 'border-b border-slate-100' : ''}`}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-800">{p.name}</p>
+                <p className="truncate text-xs text-slate-500">{p.url}</p>
+                <p className="text-[11px] text-slate-400">
+                  Registered {new Date(p.created_at).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleApprove(p.id)}
+                  disabled={actionLoading === p.id}
+                  className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-green-700 disabled:opacity-50"
+                >
+                  {actionLoading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleReject(p.id, 'reject')}
+                  disabled={actionLoading === p.id}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-red-700 disabled:opacity-50"
+                >
+                  {actionLoading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Active plugins */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-3.5">
+          <Puzzle className="h-4 w-4 text-green-600" />
+          <h2 className="font-semibold text-slate-800">Active Plugins</h2>
+          {active.length > 0 && (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+              {active.length}
+            </span>
+          )}
+        </div>
+        {active.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <Package className="h-10 w-10 text-slate-300" />
+            <p className="text-sm text-slate-500">No plugins registered yet</p>
+          </div>
+        ) : (
+          active.map((p, i) => (
+            <div
+              key={p.id}
+              className={`flex items-center justify-between px-5 py-3.5 ${
+                i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+              } ${i < active.length - 1 ? 'border-b border-slate-100' : ''}`}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-800">{p.name}</p>
+                <p className="truncate text-xs text-slate-500">{p.url}</p>
+              </div>
+              <button
+                onClick={() => handleReject(p.id, 'disable')}
+                disabled={actionLoading === p.id}
+                className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors duration-150 hover:bg-red-50 disabled:opacity-50"
+              >
+                {actionLoading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                Disable
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   )
 }
 

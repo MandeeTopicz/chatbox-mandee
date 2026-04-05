@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Crown, LineChart, Layers, CloudSun, Calendar, LinkIcon, Check } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
@@ -113,6 +113,20 @@ export function AppSidebar() {
     }
   }
 
+  const pendingPromptRef = useRef<string | null>(null)
+
+  // Fire pending prompt once we've landed on /chat
+  useEffect(() => {
+    if (pathname === '/chat' && pendingPromptRef.current) {
+      const prompt = pendingPromptRef.current
+      pendingPromptRef.current = null
+      // Small delay to let ChatInterface mount/reset
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('starter-prompt', { detail: prompt }))
+      }, 100)
+    }
+  }, [pathname])
+
   function launchApp(app: AppConfig) {
     // If app requires OAuth and user hasn't connected yet, redirect to OAuth
     if (app.oauthProvider && !connections[app.oauthProvider]) {
@@ -121,13 +135,16 @@ export function AppSidebar() {
     }
 
     if (pathname === '/chat') {
+      // Already on /chat — reset and send prompt
       window.dispatchEvent(new Event('reset-chat'))
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('starter-prompt', { detail: app.prompt }))
+      }, 150)
     } else {
+      // Navigate to /chat first, fire prompt once route settles
+      pendingPromptRef.current = app.prompt
       router.push('/chat')
     }
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('starter-prompt', { detail: app.prompt }))
-    }, 150)
   }
 
   return (

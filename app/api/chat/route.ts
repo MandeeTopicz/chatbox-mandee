@@ -627,6 +627,7 @@ async function enrichCalendarParams(
     const { getValidToken } = await import('@/lib/oauth-tokens')
     const token = await getValidToken(userId, 'google-calendar')
     if (!token) {
+      console.error('[calendar] No valid token for user', userId)
       return { ...params, _calendarError: 'Google Calendar not connected. Connect at /api/auth/oauth/google-calendar' }
     }
 
@@ -635,11 +636,13 @@ async function enrichCalendarParams(
     if (toolName === 'list_events') {
       const now = new Date().toISOString()
       const maxResults = (params.maxResults as number) || 10
-      const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(now)}&maxResults=${maxResults}&singleEvents=true&orderBy=startTime`,
-        { headers }
-      )
-      if (!res.ok) return { ...params, _calendarError: 'Failed to fetch events' }
+      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(now)}&maxResults=${maxResults}&singleEvents=true&orderBy=startTime`
+      const res = await fetch(url, { headers })
+      if (!res.ok) {
+        const errBody = await res.text()
+        console.error('[calendar] Google API error:', res.status, errBody)
+        return { ...params, _calendarError: 'Failed to fetch events' }
+      }
 
       const data = await res.json()
       const events = (data.items || []).map((ev: { id: string; summary?: string; description?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string }) => ({
@@ -691,7 +694,8 @@ async function enrichCalendarParams(
     }
 
     return params
-  } catch {
+  } catch (err) {
+    console.error('[calendar] enrichCalendarParams error:', err)
     return { ...params, _calendarError: 'Google Calendar API error' }
   }
 }

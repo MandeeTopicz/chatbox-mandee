@@ -50,6 +50,7 @@ export function ChatInterface({
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isLoadingMessages, setIsLoadingMessages] = useState(!!initialConversationId)
   const [conversationId, setConversationId] = useState<string | null>(
     initialConversationId
   )
@@ -58,13 +59,15 @@ export function ChatInterface({
   const syntheticToolIdsRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (initialConversationId) {
+      setIsLoadingMessages(true)
       setConversationId(initialConversationId)
-      loadMessages(initialConversationId)
+      loadMessages(initialConversationId).then(() => setIsLoadingMessages(false))
     } else {
       setMessages([])
       setConversationId(null)
       setActivePlugin(null)
       activePluginIdRef.current = null
+      setIsLoadingMessages(false)
     }
   }, [initialConversationId])
 
@@ -418,7 +421,11 @@ export function ChatInterface({
 
   return (
     <div className="flex h-full flex-col">
-      {messages.length === 0 ? (
+      {isLoadingMessages ? (
+        <div className="flex flex-1 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+        </div>
+      ) : messages.length === 0 ? (
         userProfile?.role === 'student' ? (
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-3xl px-4 py-6">
@@ -451,7 +458,7 @@ export function ChatInterface({
         )
       ) : (
         <ErrorBoundary fallbackMessage="Failed to render messages">
-          <MessageList messages={messages} />
+          <MessageList messages={messages} isStreaming={isStreaming} />
         </ErrorBoundary>
       )}
 

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { Bot, User, Info } from 'lucide-react'
 import type { Message } from './chat-interface'
 
-export function MessageList({ messages }: { messages: Message[] }) {
+export function MessageList({ messages, isStreaming }: { messages: Message[]; isStreaming?: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const userScrolledUpRef = useRef(false)
@@ -23,10 +23,14 @@ export function MessageList({ messages }: { messages: Message[] }) {
     }
   }, [messages])
 
-  const visibleMessages = messages.filter((msg) => {
+  const visibleMessages = messages.filter((msg, idx) => {
     if (msg.role === 'tool') return false
     if (msg.role === 'user' && /^I played .+\. Your turn\.$/.test(msg.content)) return false
-    if (msg.role === 'assistant' && !msg.content) return false
+    if (msg.role === 'assistant' && !msg.content) {
+      // Keep the last empty assistant message visible while streaming (shows loading dots)
+      if (isStreaming && idx === messages.length - 1) return true
+      return false
+    }
     return true
   })
 
