@@ -90,13 +90,8 @@ export async function exchangeCode(
     grant_type: 'authorization_code',
   })
 
-  // Spotify requires Basic auth header for token exchange
   const headers: Record<string, string> = {
     'Content-Type': 'application/x-www-form-urlencoded',
-  }
-
-  if (provider.tokenUrl.includes('spotify')) {
-    headers['Authorization'] = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
   }
 
   const res = await fetch(provider.tokenUrl, {
@@ -130,17 +125,9 @@ export async function refreshAccessToken(
     grant_type: 'refresh_token',
   })
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/x-www-form-urlencoded',
-  }
-
-  if (provider.tokenUrl.includes('spotify')) {
-    headers['Authorization'] = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
-  }
-
   const res = await fetch(provider.tokenUrl, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   })
 

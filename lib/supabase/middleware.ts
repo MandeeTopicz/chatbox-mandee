@@ -73,9 +73,9 @@ export async function updateSession(request: NextRequest) {
       'Content-Security-Policy-Report-Only',
       [
         `default-src 'self'`,
-        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com https://accounts.google.com https://accounts.spotify.com`,
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com https://accounts.google.com`,
         `style-src 'self' 'unsafe-inline'`,
-        `img-src 'self' data: blob: https://api.weather.gov https://i.scdn.co`,
+        `img-src 'self' data: blob: https://api.weather.gov`,
         `font-src 'self'`,
         `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} https://unpkg.com https://accounts.google.com https://oauth2.googleapis.com https://classroom.googleapis.com https://www.googleapis.com https://api.weather.gov https://geocoding-api.open-meteo.com`,
         `frame-src 'self'`,

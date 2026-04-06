@@ -1,8 +1,18 @@
 # ChatBridge
 
-ChatBridge is an AI chat platform for TutorMeAI that enables third-party educational applications to run inside the chat window. The AI tutor (powered by Claude) remains aware of what is happening inside those applications — it can invoke them, respond to their output, and continue the conversation with full context. The platform ships with three integrated plugins: a chess game with persistent player profiles, a graphing calculator with structured data analysis, and a flashcard quiz system with teacher-authored content and personalized follow-up.
+ChatBridge is an AI chat platform for TutorMeAI that enables third-party educational applications to run inside the chat window. The AI tutor (powered by Claude) remains aware of what is happening inside those applications — it can invoke them, respond to their output, and continue the conversation with full context.
 
-**Deployed URL:** _[set after Vercel deployment]_
+The platform ships with five integrated plugins demonstrating three auth patterns:
+
+| Plugin | Auth Pattern | Lifecycle |
+|--------|-------------|-----------|
+| Chess | Internal (platform auth, persistent W/L/D profile) | Ongoing bidirectional state |
+| Graphing Calculator | Internal (no auth) | Stateless invoke-render-done |
+| Flashcard Quiz | Internal (teacher-gated creation) | Stateful session with scored completion |
+| Weather | External public API (no user auth) | Stateless invoke-render-done |
+| Google Calendar | External authenticated (Google OAuth2) | OAuth flow, encrypted token storage, auto-refresh |
+
+**Deployed URL:** https://chatbox-mandee.vercel.app
 
 ## Setup
 
@@ -35,6 +45,13 @@ cp .env.local.example .env.local
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Dashboard → Settings → API → anon public |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API → service_role secret |
 | `ANTHROPIC_API_KEY` | Anthropic Console → API Keys |
+| `ENCRYPTION_KEY` | 32-byte hex key for AES-256-GCM token encryption (`openssl rand -hex 32`) |
+| `GOOGLE_CLIENT_ID` | Google Cloud Console → Credentials → OAuth 2.0 Client ID |
+| `GOOGLE_CLIENT_SECRET` | Google Cloud Console → Credentials → OAuth 2.0 Client Secret |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | `https://your-app.vercel.app/api/auth/oauth/google-calendar/callback` |
+| `OPENWEATHERMAP_API_KEY` | OpenWeatherMap → API Keys (free tier) |
+
+Only the first four are required for core functionality. The Google and weather variables enable the Calendar and Weather plugins respectively.
 
 ### Database
 
@@ -121,6 +138,67 @@ Plugins communicate with the platform via `window.postMessage`. Every message ha
 3. Listen for `TOOL_INVOKE` messages, process them, send `TOOL_RESULT` back
 4. Add the plugin to the `plugins` table with tool schemas (use `scripts/seed-all-plugins.ts` as a template)
 5. Set `allowed: true` to activate
+
+## API Endpoints
+
+All endpoints require authentication unless noted. Auth is via Supabase session cookie.
+
+### Chat
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/chat` | Required | Send a message or tool result. Streams Claude's response via SSE. |
+
+### Conversations
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/conversations` | Required | List all conversations for the authenticated user. |
+| GET | `/api/conversations/[id]` | Required | Get a conversation with full message history. |
+| DELETE | `/api/conversations/[id]` | Required | Delete a conversation and all its messages. |
+
+### Plugins
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/plugins` | Required | List all approved plugins and their tool schemas. |
+| POST | `/api/plugins` | Teacher | Register a new plugin (created with `allowed: false`). |
+| GET | `/api/admin/plugins` | Admin | List all plugins including pending (admin review). |
+| PATCH | `/api/admin/plugins/[id]` | Admin | Approve (`{allowed: true}`) or reject/delete (`{allowed: false}`). |
+
+### Quizzes
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/quizzes` | Required | List all available quiz sets. |
+| GET | `/api/quizzes/[id]` | Required | Get quiz content for a specific quiz. |
+| POST | `/api/quizzes` | Teacher | Create a new quiz set with cards. |
+
+### Users & Auth
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/chess/profile` | Required | Get win/loss/draw/streak/rating for the user. |
+| POST | `/api/chess/result` | Required | Record a game outcome. Updates chess_profiles. |
+| GET | `/api/users/stats` | Required | Get quiz completion count for the user. |
+| GET | `/api/connections` | Required | Check which OAuth providers the user has connected. |
+
+### Admin
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/admin/stats` | Admin | Dashboard stats: schools, teachers, students, quizzes. |
+| POST | `/api/admin/users` | Admin | Create a new user account. |
+| PATCH | `/api/admin/users/[id]` | Admin | Update role, school, or display name. |
+| DELETE | `/api/admin/users/[id]` | Admin | Remove a user from the platform. |
+| POST | `/api/admin/schools` | Admin | Create a new school. |
+
+### OAuth
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/auth/oauth/[provider]` | Required | Initiates OAuth flow (redirects to provider). |
+| GET | `/api/auth/oauth/[provider]/callback` | — | OAuth callback. Exchanges code, stores encrypted tokens. |
 
 ## Deployment (Vercel)
 

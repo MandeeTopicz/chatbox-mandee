@@ -76,7 +76,7 @@ export function AppSidebar() {
     loadConnections()
   }, [])
 
-  // Auto-launch app after OAuth redirect (e.g., ?oauth_connected=spotify)
+  // Auto-launch app after OAuth redirect (e.g., ?oauth_connected=google-calendar)
   useEffect(() => {
     if (!connectionsLoaded) return
     const connectedProvider = searchParams.get('oauth_connected')

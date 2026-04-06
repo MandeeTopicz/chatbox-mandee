@@ -3,7 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 /**
  * Returns which OAuth providers the current user has connected.
- * Response: { connections: { spotify: boolean, google: boolean, ... } }
+ * Response: { connections: { "google-calendar": boolean, ... } }
  */
 export async function GET() {
   const supabase = await createClient()
